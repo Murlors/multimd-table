@@ -14,7 +14,7 @@ test("mixed line endings retain UTF-16 ranges and stop at rejected input", () =>
 });
 
 test("single-line whitespace and ragged continuation segments preserve source", () => {
-  const source = "A|B\n-|-\n  x  | \t |\n first | second |\\\n last \n";
+  const source = "A|B\n-|-\n\u00a0\u2003x\u202f\ufeff| \t |\n first | second |\\\n last \n";
   // A continuation without a pipe is rejected without consuming it.
   const scanner = new TableScanner({ multiline: true });
   let offset = 0;
@@ -26,6 +26,10 @@ test("single-line whitespace and ragged continuation segments preserve source", 
   const cells = table.sections[1]!.rows[0]!.cells;
   expect(cells.map((cell) => cell.value)).toEqual(["x", ""]);
   expect(cells[1]!.segments[0]!.start).toBe(cells[1]!.segments[0]!.end);
+  for (const cell of cells) {
+    const segment = cell.segments[0]!;
+    expect(source.slice(segment.start, segment.end)).toBe(cell.value);
+  }
   const snapshot = structuredClone(table);
   expect(scanner.push("plain rejected line", offset)).toBe(false);
   expect(scanner.finish()).toEqual(snapshot);
@@ -48,6 +52,13 @@ test("single-line whitespace and ragged continuation segments preserve source", 
         .join("\n"),
     ).toBe(cell.value);
   }
+
+  const mergedSource = "A|B\n-|-\nfirst|second\n\u2003^^\u00a0|\ufeff😀\u202f";
+  const merged = parseTable(mergedSource, { rowspan: true })!.sections[1]!;
+  expect(merged.rows[0]!.cells[0]!.rowspan).toBe(2);
+  expect(merged.rows[1]!.cells.map((cell) => cell.value)).toEqual(["😀"]);
+  const segment = merged.rows[1]!.cells[0]!.segments[0]!;
+  expect(mergedSource.slice(segment.start, segment.end)).toBe("😀");
 });
 
 test("continuation validation uses original pipe boundaries before removing slash", () => {

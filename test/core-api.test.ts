@@ -130,7 +130,7 @@ test("zero-column separators integrate with GFM without changing fallback", () =
 });
 
 test("expanded sections preserve origin identity, holes and section boundaries", () => {
-  const table = parseTable("A|B|C\n-|-|-\nx||z\n^^||w\n\n||tail", {
+  const table = parseTable("A|B|C\n-|-|-\nx||z\n^^||w\n\n||tail\nshort|", {
     rowspan: true,
   })!;
   const body = table.sections[1]!;
@@ -148,11 +148,16 @@ test("expanded sections preserve origin identity, holes and section boundaries",
   ]) {
     expect(grid[r]![c]!.origin).toBe(body.rows[0]!.cells[0]!);
     expect(grid[r]![c]!.inherited).toBe(true);
+    expect(grid[r]![c]).not.toBe(grid[0]![0]);
   }
   expect(body).toEqual(snapshot);
-  expect(
-    expandSection(table.sections[2]!)[0]!.map((cell) => cell?.value ?? null),
-  ).toEqual([null, "tail"]);
+  const ragged = expandSection(table.sections[2]!);
+  expect(ragged.map((row) => row.map((cell) => cell?.value ?? null))).toEqual([
+    [null, "tail"],
+    ["short", null],
+  ]);
+  expect(ragged[0]![0]).toBeNull();
+  expect(ragged[1]![1]).toBeNull();
   expect(
     expandSection({ kind: "body", rows: [], range: { start: 0, end: 0 } }),
   ).toEqual([]);

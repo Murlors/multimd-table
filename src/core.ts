@@ -394,7 +394,8 @@ export function expandSection(section: Section): (ExpandedCell | null)[][] {
   );
   let width = 0;
   for (const row of grid) width = Math.max(width, row.length);
-  return grid.map((row) =>
-    Array.from({ length: width }, (_, col) => row[col] || null),
-  );
+  // grid 为本次展开独有，直接补齐空位，避免为矩形结果再次复制每行。
+  for (const row of grid)
+    for (let col = 0; col < width; col++) row[col] ??= null;
+  return grid;
 }
