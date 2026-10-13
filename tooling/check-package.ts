@@ -55,6 +55,26 @@ assert.ok(scanner.finish());
 console.log("core runtime passed");
 `;
 
+const writerProbe = `
+import assert from "node:assert/strict";
+import { stringifyTable } from "multimd-table/writer";
+import { parseTable } from "multimd-table";
+const input = {
+  columns: [{ align: "center", wrap: true }, { align: null }],
+  sections: [{ kind: "body", rows: [
+    { cells: [{ column: 0, colspan: 2, rowspan: 2, value: "merged" }] },
+    { cells: [] },
+  ] }],
+};
+const source = stringifyTable(input);
+const table = parseTable(source, { rowspan: true, headerless: true });
+assert.equal(table.sections[0].rows[0].cells[0].colspan, 2);
+assert.equal(table.sections[0].rows[0].cells[0].rowspan, 2);
+assert.deepEqual(table.columns[0], { align: "center", wrap: true });
+assert.throws(() => stringifyTable({ ...input, columns: [] }), RangeError);
+console.log("writer runtime passed");
+`;
+
 const remarkProbe = `
 import assert from "node:assert/strict";
 import { unified } from "unified";
@@ -130,6 +150,17 @@ if (table) {
 }
 `;
 
+const writerTypes = `
+import { stringifyTable, type WriteTable, type WriteSection, type WriteRow, type WriteCell, type WriteCaption } from "multimd-table/writer";
+const cell: WriteCell = { column: 0, value: "cell" };
+const row: WriteRow = { cells: [cell] };
+const section: WriteSection = { kind: "body", rows: [row] };
+const caption: WriteCaption = { value: "caption", side: "top", id: null };
+const table: WriteTable = { columns: [{ align: null }], sections: [section], caption };
+const source: string = stringifyTable(table);
+void source;
+`;
+
 const remarkTypes = `
 import { unified } from "unified";
 import remarkParse from "remark-parse";
@@ -175,6 +206,7 @@ await compile("A|B\\n-| -", { remarkPlugins: [[multimd, { rowspan: true }]] });
 
 const consumers = {
   core: { runtime: coreProbe, types: coreTypes, dependencies: [] },
+  writer: { runtime: writerProbe, types: writerTypes, dependencies: [] },
   remark: {
     runtime: remarkProbe, types: remarkTypes,
     dependencies: ["unified", "mdast-util-from-markdown", "remark-parse", "remark-gfm", "remark-rehype", "rehype-stringify"],
@@ -217,6 +249,8 @@ try {
     "package/README.md",
     "package/dist/core.js",
     "package/dist/core.d.ts",
+    "package/dist/writer.js",
+    "package/dist/writer.d.ts",
     "package/dist/remark.js",
     "package/dist/remark.d.ts",
     "package/dist/marked.js",

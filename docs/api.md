@@ -68,6 +68,76 @@ All ranges are UTF-16 half-open intervals (`start` inclusive, `end` exclusive),
 matching JavaScript string offsets. A multiline cell's `segments` locate its
 separate source pieces. Cell `value` is raw Markdown rather than HTML.
 
+## Writer: `multimd-table/writer`
+
+Named export `stringifyTable(table: WriteTable): string` writes a single table
+with LF line endings and no trailing newline. It has no runtime peers and does
+not depend on React or an editor. The core `Table` is also structurally assignable
+to `WriteTable` when its grid satisfies the writer's validation.
+
+Exported input types:
+
+```ts
+interface WriteTable {
+  columns: readonly { align: Alignment; wrap?: boolean }[];
+  sections: readonly WriteSection[];
+  caption?: WriteCaption | null;
+}
+interface WriteSection { kind: "head" | "body"; rows: readonly WriteRow[] }
+interface WriteRow { cells: readonly WriteCell[] }
+interface WriteCell {
+  column: number;
+  colspan?: number; // default 1
+  rowspan?: number; // default 1
+  value: string;    // Markdown, serialized by the host
+  block?: boolean;  // default false
+}
+interface WriteCaption {
+  value: string;
+  id?: string | null;
+  side: "top" | "bottom";
+}
+```
+
+`Alignment` is the core `"left" | "center" | "right" | null` type. `wrap` defaults
+to false. Every position in every row must be covered exactly once, including
+positions inherited from spans. Represent genuine empty cells with `value: ""`;
+omit inherited cells from a row's `cells`. Cell order does not matter. Columns,
+sections and section rows must be nonempty. A single optional head section must
+come first; it may contain multiple rows. Any number of body sections follows.
+Row spans stay within their section. Invalid, overlapping, incomplete or
+out-of-bounds grids throw `RangeError`, with the section/row/column when relevant.
+Input objects are not mutated.
+
+Use `{ rowspan: true, multiline: true, headerless: true, multibody: true }` when
+parsing the result. Captions with `id: undefined` use the parser's automatic ID.
+Non-null IDs must already be normalized (lowercase ASCII word characters), and
+are preserved with `autolabel: true`. An empty ID is supported; when the automatic
+ID is nonempty, a non-word label `[!]` represents the explicit empty ID. `id: null` writes an
+unlabeled caption and requires `autolabel: false` to retain null. Caption Markdown
+must be nonempty, single-line and unambiguous with the optional label syntax.
+
+Content is Markdown rather than plain text. Ordinary literal pipes and `^^` are
+escaped, existing escapes retain their meaning, and inline code pipes are kept
+inside a single-backtick code span. The writer may normalize the delimiter of a
+code span, line endings, hard-break spelling and insignificant whitespace. A
+continued row makes **all its cells block cells**, including inline siblings;
+one-line block cells receive an empty continuation line. The `block` flag and
+exact raw Markdown spelling are therefore not round-trip equality guarantees.
+Literal block markers in inline siblings are protected during promotion.
+Inline HTML blocks and reference-definition spellings that would change meaning
+when promoted are rejected.
+
+MultiMarkdown splits physical lines before interpreting cell Markdown. Some
+content cannot be preserved: pipes in fenced/indented code, code spans containing
+both pipes and backticks when no single-backtick representation exists, or
+significant trailing whitespace in block code or raw HTML, and pipe-bearing
+autolinks (serialize these as explicit Markdown links). These cases throw `RangeError`
+instead of changing the code. The host owns extension syntax and must serialize
+it with table-compatible escaping; the writer cannot infer custom math, HTML,
+JSX or plugin-specific escaping rules. Editors can preserve a table's source
+locally when serialization throws.
+
 ## remark: `multimd-table/remark`
 
 The default export is `remarkMultimdTable`, a unified plugin. Place it after

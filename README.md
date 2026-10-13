@@ -37,6 +37,7 @@ the adapter you use; the core has no runtime imports.
 | Entry | Host / peers |
 | --- | --- |
 | `multimd-table` | None at runtime |
+| `multimd-table/writer` | None at runtime |
 | `multimd-table/remark` | `unified` 11, `mdast-util-from-markdown` 2 |
 | `multimd-table/marked` | `marked` 18 (Node.js 20+ when used in Node) |
 | `multimd-table/markdown-it` | `markdown-it` 15 |
@@ -162,6 +163,27 @@ if (table) {
 `parseTable` recognizes one table **at the start of the string**, stopping at the
 first rejected line. Cell values remain Markdown strings. Use an adapter for
 whole documents: the core does not handle outer fences, lists or block quotes.
+
+## Standalone writer
+
+```ts
+import { stringifyTable } from "multimd-table/writer";
+
+const source = stringifyTable({
+  columns: [{ align: null }, { align: "right" }],
+  sections: [{ kind: "body", rows: [
+    { cells: [{ column: 0, colspan: 2, rowspan: 2, value: "Merged" }] },
+    { cells: [] }, // Covered by the cell above.
+  ] }],
+});
+```
+
+The writer accepts Markdown strings and a grid without source ranges. It emits
+canonical table syntax, validates complete span coverage, and preserves
+Markdown semantics rather than source whitespace. Read the output with
+`{ rowspan: true, multiline: true, headerless: true, multibody: true }`.
+Unrepresentable content throws `RangeError`; see the
+[writer contract](docs/api.md#writer-multimd-tablewriter) before integrating an editor.
 
 ## Syntax
 
