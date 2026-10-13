@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.tgz
+coverage/
+# 本地性能研究，不作为开源项目或 npm 包的一部分。
+bench/
+.DS_Store

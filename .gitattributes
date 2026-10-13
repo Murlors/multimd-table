@@ -1,0 +1,2 @@
+# 上游兼容夹具包含有语义的尾随空格，必须原样保留。
+test/fixtures/*.txt -whitespace
