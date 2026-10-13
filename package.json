@@ -49,7 +49,7 @@
     "tag": "latest"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && bun build src/core.ts src/remark.ts src/marked.ts src/markdown-it.ts --no-bundle --minify --keep-names --format=esm --target=browser --root=src --outdir=dist",
     "typecheck": "tsc --noEmit",
     "test": "bun test ./test",
     "test:development": "bun --conditions=development test ./test",
