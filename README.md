@@ -1,60 +1,38 @@
 # multimd-table
 
-Parser-independent MultiMarkdown tables with a native remark adapter.
+MultiMarkdown-style tables with merged cells, captions, multiple headers, and
+multiline Markdown content. Use a native adapter for **remark**, **Marked**, or
+**markdown-it**, or the **parser-independent core** for structured table models.
 
-The first beta is `0.1.0-beta.1`. The public API may change before 1.0.
-
-Table recognition, spans and source ranges are independent of the Markdown
-host. The root entry has no runtime imports. `multimd-table/remark` is a
-separate entry; its runtime peers are optional for core-only consumers. The
-package includes type dependencies, but does not pull a Markdown runtime into
-the core bundle. The implementation is TypeScript.
-
-For the standalone core:
-
-```sh
-bun add multimd-table@beta
+```markdown
+| Region | Quarter | Revenue |
+| ------ | ------- | ------- |
+| North  | Q1      | 12      |
+| ^^     | Q2      | 15      |
+| Total           || 27      |
 ```
 
-## Core API
+With `{ rowspan: true }`, this becomes:
 
-```ts
-import { parseTable, expandSection } from "multimd-table";
+<table>
+  <thead>
+    <tr><th>Region</th><th>Quarter</th><th>Revenue</th></tr>
+  </thead>
+  <tbody>
+    <tr><td rowspan="2">North</td><td>Q1</td><td>12</td></tr>
+    <tr><td>Q2</td><td>15</td></tr>
+    <tr><td colspan="2">Total</td><td>27</td></tr>
+  </tbody>
+</table>
 
-const table = parseTable("A|B\n-|-\nx|1\n^^|2", { rowspan: true });
-if (table) {
-  const body = table.sections.find((section) => section.kind === "body");
-  const rows = body ? expandSection(body) : [];
-}
-```
+`^^` extends **North** across two rows. The adjacent `||` extends **Total**
+across two columns.
 
-`parseTable` recognizes one table at the start of a string. Hosts own outer
-document boundaries such as code fences, lists and quotes. `TableScanner`
-provides incremental recognition for adapters. `expandSection` preserves
-origin identity: repeated inherited values are not independent numeric facts.
+The package is currently in beta; the public API may change before 1.0.
 
-| API                                       | Contract                                                                                                                           |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `parseTable(source, options?)`            | Returns the leading `Table`, or `null`; stops at the first rejected line.                                                          |
-| `new TableScanner(options?)`              | Incremental parser for hosts that own line boundaries.                                                                             |
-| `scanner.push(line, offset)`              | Pass one physical line without its line ending and its UTF-16 start offset. A rejected line leaves scanner state unchanged.        |
-| `scanner.finish()`                        | Returns an independent snapshot or `null`; can be repeated and does not close the scanner.                                         |
-| `scanner.committed / accepted / finished` | Delimiter recognized / a table can be produced / terminating caption consumed. A rejected input does not itself close the scanner. |
-| `expandSection(section)`                  | Returns a rectangular grid with `null` holes, original cell identity and an `inherited` flag; never merges separate sections.      |
-| `defaults`                                | Read-only default option values.                                                                                                   |
+## Quick start: react-markdown
 
-Core types (`Options`, `Table`, `Section`, `Row`, `Cell`, `Caption`, `Range`,
-`Alignment`, `ExpandedCell`) are exported from the root. All ranges are UTF-16
-half-open intervals. `cellBounds` exposes the same pipe-boundary rule used by
-the scanner for low-level host integrations; it is not a document parser.
-
-## remark / ReactMarkdown
-
-Use the remark plugin for Markdown-host integration. The standalone core API
-is intended for consumers that own their document boundaries and rendering.
-
-For the example below, install ReactMarkdown, remark-gfm and the adapter peers
-alongside the package:
+Install the package, React, the renderer, and the remark adapter's peers:
 
 ```sh
 bun add multimd-table@beta react react-dom react-markdown remark-gfm unified mdast-util-from-markdown
@@ -65,105 +43,325 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMultimdTable from "multimd-table/remark";
 
-<ReactMarkdown
-  remarkPlugins={[remarkGfm, [remarkMultimdTable, { rowspan: true, multiline: true }]]}
->
-  {markdown}
-</ReactMarkdown>;
+const markdown = `
+| Region | Quarter | Revenue |
+| ------ | ------- | ------- |
+| North  | Q1      | 12      |
+| ^^     | Q2      | 15      |
+| Total           || 27      |
+`;
+
+export default function Report() {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, [remarkMultimdTable, { rowspan: true }]]}
+    >
+      {markdown}
+    </ReactMarkdown>
+  );
+}
 ```
 
-Place this plugin **after remark-gfm**. Native mdast nodes carry safe table
-structure to HAST; `rehype-raw` is not required. Keep `rowSpan` and `colSpan`
-props when overriding the renderer's `th` or `td` components. Other inline
-extensions remain owned by the host. Default HTML/URL policies also remain
-owned by the host.
+Place `remarkMultimdTable` **after `remarkGfm`** when using both plugins.
+`remarkGfm` is optional; it supplies features such as strikethrough and
+footnotes. `rehype-raw` is not required to render these tables.
 
-Custom renderers should also preserve controlled alignment (`text-align`),
-the `extend` class for wrappable columns, and caption placement
-(`caption-side: bottom`). A host sanitizer may remove these attributes or
-the `caption` element; configure only the fixed values you support, rather
-than permitting arbitrary CSS. No raw-HTML permission is required for this
-plugin's own tables.
+For custom components and sanitizers, see [rendering](#rendering).
 
-The adapter emits custom table nodes and preserves UTF-16 source positions.
-Markdown serialization and rich-text editing are not implemented; do not send
-these nodes to a serializer that only understands standard GFM tables.
-The adapter exports `RemarkOptions` (the same five core options) and
-`MultimdNode`. A `multimdTable` node retains its core `model` for inspection;
-its `children` contain host-parsed Markdown and `data.hName/hProperties`
-describe native table elements. The model is useful for consumers deciding
-whether their editor can safely round-trip a table. Internal token state and
-scanner-backend factories are not public extension points.
+## Quick start: remark / unified
 
-## Parsing flow
-
-The core scanner owns table structure only. The remark adapter registers a
-native micromark flow construct, passes accepted lines to `TableScanner`, then
-creates mdast table nodes. Ordinary cells are parsed in one batch with the
-host's inline extensions; multiline block cells are parsed separately to
-preserve block boundaries. Source positions are mapped back to the original
-document. remark-rehype and ReactMarkdown keep owning the final rendering.
-
-Link and footnote identifiers are shared with cell parsers. A new definition
-inside a multiline cell may be discovered after the outer inline pass; only
-such documents require a second native parse so earlier cells and surrounding
-text can resolve it. No text nodes are rewritten into links. Source and
-reference state are scoped to one synchronous parse and restored on failure.
-Duplicate definitions follow host AST traversal order. Multiline blocks are
-parsed one cell at a time, matching the reference plugin; this can differ
-from the physical line order across two cells of the same multiline row.
-
-## Compatibility target
-
-The reference is `markdown-it-multimd-table` 4.2.3 at commit
-`a5b1277bab21677ccd5a77b4766a5d7f3b4cd3fa`, not the full MultiMarkdown language.
-The TS suite covers all 54 upstream fixtures, plus option combinations and
-integration tests. Supported features:
-
-| Capability           | Reference behavior                                                                                       |
-| -------------------- | -------------------------------------------------------------------------------------------------------- |
-| Column spans         | Adjacent pipes extend the preceding cell; whitespace-only cells remain cells                             |
-| Row spans            | `^^` continues a cell above when `rowspan` is enabled                                                    |
-| Multiple header rows | All rows before the delimiter belong to the header                                                       |
-| Column delimiters    | Hyphens or equals; colon alignment; trailing `+` sets the `extend` class                                 |
-| Captions             | Before or after the table; the first caption wins; inline Markdown supported                             |
-| Labels               | Explicit `[caption][label]`, otherwise generated when `autolabel` is enabled                             |
-| Multiple bodies      | One blank line separates bodies when `multibody` is enabled                                              |
-| Headerless tables    | A delimiter can open the table when `headerless` is enabled                                              |
-| Multiline cells      | Trailing backslash joins physical rows when `multiline` is enabled                                       |
-| Block contents       | Multiline cells may contain paragraphs, nested lists and fenced/indented code                            |
-| Syntax boundaries    | Optional outer pipes, escaped pipes, backtick rules, ragged rows and empty cells                         |
-| Host context         | Lists, block quotes, references, fenced examples and surrounding paragraphs are covered by adapter tests |
-
-Reference defaults: `multiline: false`, `rowspan: false`, `headerless: false`,
-`multibody: true`, `autolabel: true`. Inline and block Markdown are interpreted
-by the host, so host-specific Markdown differences are not parser-core bugs.
-
-## Local development
+For a Markdown-to-HTML pipeline:
 
 ```sh
-bun install
-bun run test
-bun run check
-bun run check:package
+bun add multimd-table@beta unified remark-parse remark-gfm remark-rehype rehype-stringify mdast-util-from-markdown
 ```
 
-`bun run test` runs the TS suite. `bun run check` runs TypeScript checking,
-the suite under micromark's development assertions, and the package build.
-`bun run check:package` builds a real tarball and installs it in separate core
-and remark consumers, checking Bun, Node and TypeScript with no link to the
-development checkout. The core consumer deliberately omits the adapter peers.
-Node must be available for this check. `prepack` runs the standard check before
-creating a release artifact. Source files accompany source/declaration maps
-so consumer debugging and type navigation do not point at missing files.
+```ts
+import { unified } from "unified";
+import remarkParse from "remark-parse";
+import remarkGfm from "remark-gfm";
+import remarkRehype from "remark-rehype";
+import rehypeStringify from "rehype-stringify";
+import remarkMultimdTable from "multimd-table/remark";
 
-No editor UI, indexing service or browser layout engine is included. The
-package tests include React server rendering. No rich-text serializer is
-included.
+const markdown = "A|B\n-|-\nmerged||\n^^||";
+const html = String(
+  unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkMultimdTable, { rowspan: true })
+    .use(remarkRehype)
+    .use(rehypeStringify)
+    .processSync(markdown),
+);
 
-## Licensing
+console.log(html); // A table with one body cell spanning two rows and columns.
+```
 
-MIT. The table boundary scanning, recognition rules and compatibility fixtures
-are adapted from [markdown-it-multimd-table](https://github.com/redbug312/markdown-it-multimd-table)
-4.2.3, copyright (c) 2019 RedBug312. The upstream copyright and MIT license are
-preserved in [LICENSE](LICENSE); see [NOTICE](NOTICE) for attribution details.
+`remark-rehype` converts the adapter's nodes to native HTML table elements.
+
+## Quick start: Marked
+
+```sh
+bun add multimd-table@beta marked
+```
+
+```ts
+import { Marked } from "marked";
+import markedMultimdTable from "multimd-table/marked";
+
+const parser = new Marked(
+  markedMultimdTable({ rowspan: true, multiline: true }),
+);
+console.log(parser.parse("A|B\n-|-\nmerged||\n^^||", { async: false }));
+```
+
+Cells use the same lexer and renderer as the document. Custom extensions and
+`walkTokens`, including async callbacks, also apply inside cells. Container
+continuation follows Marked's native table behavior.
+
+## Quick start: markdown-it
+
+```sh
+bun add multimd-table@beta markdown-it
+```
+
+```ts
+import MarkdownIt from "markdown-it";
+import markdownItMultimdTable from "multimd-table/markdown-it";
+
+const parser = new MarkdownIt().use(markdownItMultimdTable, {
+  rowspan: true,
+  multiline: true,
+});
+console.log(parser.render("A|B\n-|-\nmerged||\n^^||"));
+```
+
+The plugin preserves the host's table enable/disable setting and renderer
+rules. With the CommonMark preset, call `.enable("table")` to enable tables.
+
+## Quick start: MDX
+
+MDX uses the same remark plugin through `remarkPlugins`:
+
+```sh
+bun add multimd-table@beta @mdx-js/mdx remark-gfm unified mdast-util-from-markdown
+```
+
+```ts
+import { compile } from "@mdx-js/mdx";
+import remarkGfm from "remark-gfm";
+import remarkMultimdTable from "multimd-table/remark";
+
+const result = await compile("A|B\n-|-\n{1 + 1}|note\n^^|next", {
+  remarkPlugins: [
+    remarkGfm,
+    [remarkMultimdTable, { rowspan: true, multiline: true }],
+  ],
+});
+console.log(String(result)); // Compiled MDX JavaScript.
+```
+
+JSX components and expressions inside cells follow MDX's syntax and runtime.
+The same `remarkPlugins` configuration works in an MDX bundler integration.
+
+## Standalone core
+
+Use the root entry when you own document boundaries, cell interpretation, and
+rendering. It has no runtime imports or requirement for the remark peers.
+
+```sh
+bun add multimd-table@beta
+```
+
+```ts
+import { parseTable, expandSection } from "multimd-table";
+
+const source = [
+  "Region|Quarter|Revenue",
+  "------|-------|-------",
+  "North|Q1|12",
+  "^^|Q2|15",
+  "Total||27",
+].join("\n");
+
+const table = parseTable(source, { rowspan: true });
+if (!table) throw new Error("Not a table");
+
+const body = table.sections.find((section) => section.kind === "body");
+if (!body) throw new Error("No body section");
+
+const grid = expandSection(body);
+console.log(grid.map((row) => row.map((cell) => cell?.value ?? null)));
+// [
+//   ["North", "Q1", "12"],
+//   ["North", "Q2", "15"],
+//   ["Total", "Total", "27"],
+// ]
+
+console.log(grid[1]?.[0]?.inherited); // true
+console.log(grid[1]?.[0]?.origin === grid[0]?.[0]?.origin); // true
+```
+
+`parseTable` recognizes **one table at the start of the string** and stops at
+the first rejected line. The host must handle outer code fences, lists, and
+block quotes; use the remark adapter for whole documents.
+
+Cell values remain Markdown strings. `expandSection` fills positions covered
+by spans, retaining the original cell as `origin` and marking copies as
+`inherited`. Missing positions are `null`; sections are expanded separately.
+
+## Table syntax
+
+### Merged and empty cells
+
+- **Column span:** add adjacent pipes after a cell, such as `Total||27`.
+  Column spans are always enabled; keep trailing pipes when the span reaches
+  the end of a row.
+- **Row span:** with `rowspan: true`, put `^^` in the column to continue the
+  cell above. Row spans stay within their header or body section.
+- **Empty cell:** put whitespace between the pipes: `A| |C`. A truly empty
+  segment (`A||C`) extends the preceding cell instead.
+- Leading and trailing outer pipes are optional. Escape a literal pipe as
+  `\|`; pipes inside code spans follow the reference parser's backtick rules.
+
+### Alignment, captions, and headers
+
+```markdown
+[Quarterly results][quarterly_results]
+| Region | Revenue | Notes       |
+| :----- | ------: | :---------:+ |
+| North  | 27      | **On track** |
+```
+
+- Delimiters may use hyphens (`---`) or equals (`===`). Colons select left
+  (`:---`), right (`---:`), or center (`:---:`) alignment.
+- A trailing `+` marks a column with the `extend` class. The package supplies
+  the marker; your stylesheet decides how the column wraps.
+- A caption goes immediately before or after the table. The first caption
+  wins; a second remains outside the table. Captions support inline Markdown.
+- `[Caption][label]` sets an explicit caption ID. Otherwise `autolabel: true`
+  generates one from the caption. IDs are lowercased and non-word characters
+  removed: `[Quarterly results]` becomes `quarterlyresults`.
+- Every row before the delimiter is a header row. For a table without headers,
+  enable `headerless` and begin with the delimiter followed by a body row.
+
+### Multiline cells and body sections
+
+With `multiline: true`, a backslash at the physical end of a line continues
+the row. End the final line without a backslash:
+
+```markdown
+| Task   | Notes   |
+| ------ | ------- |
+| Launch | - Build |\
+|        | - Test  |
+```
+
+This creates one body row: **Launch** in the first cell and a two-item list in
+the second. Joined cells are parsed as block Markdown, supporting paragraphs,
+lists, and fenced or indented code. Keep the columns aligned across lines and
+do not add whitespace after the continuation backslash.
+
+With `multibody: true` (the default), one blank line **between body rows**
+starts a new body section (`tbody`). Two blank lines end the table. A blank
+line immediately after the delimiter ends the table before its first body
+row. With `multibody: false`, any blank line ends the table.
+
+## Options
+
+Pass the same options to `parseTable`, `TableScanner`, or any adapter.
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `rowspan` | `false` | Recognize `^^` as a continuation of the cell above. |
+| `multiline` | `false` | Join physical rows ending in a backslash and parse their cells as blocks. |
+| `headerless` | `false` | Allow the delimiter to open a table without header rows. |
+| `multibody` | `true` | Allow one blank line between body sections. |
+| `autolabel` | `true` | Generate a caption ID when no explicit label is supplied. |
+
+## Public API
+
+The package is **ESM only**, with TypeScript declarations for every entry.
+Use named imports from the core and default imports for the adapters. Host
+dependencies are optional: install only the parser used by your adapter.
+
+### `multimd-table`
+
+| Export | Contract |
+| --- | --- |
+| `parseTable(source, options?)` | Return the leading `Table`, or `null` when no table is recognized. |
+| `expandSection(section)` | Return a rectangular `(ExpandedCell \| null)[][]` grid, preserving `origin` and `inherited`. |
+| `TableScanner` | Incremental recognition for hosts that provide their own line and document boundaries. |
+| `cellBounds(line)` | Return UTF-16 pipe boundaries under the scanner's escape and backtick rules. Missing outer pipes use virtual boundaries: `-1` and the trimmed line end. No valid pipes yields `[]`. |
+| `defaults` | Read-only default option values. |
+
+For incremental parsing, construct `new TableScanner(options?)`, then call
+`push(line, offset)` with a line without its line ending and its UTF-16 source
+offset. Rejection returns `false` without changing state. `finish()` returns
+an independent snapshot or `null` and permits further input. The flags are
+`committed` (delimiter read), `accepted` (model available), and `finished`
+(a bottom caption ended the table).
+
+Exported types: `Options`, `Table`, `Section`, `Row`, `Cell`, `Caption`, `Range`,
+`Alignment`, and `ExpandedCell`. All ranges are UTF-16 half-open intervals
+(`start` inclusive, `end` exclusive), matching JavaScript string offsets.
+A multiline cell's `segments` locate its separate pieces of source text.
+
+### `multimd-table/remark`
+
+The default export is the remark plugin. This entry also exports the types
+`RemarkOptions` (the same five core options) and `MultimdNode`. Its runtime
+peers are `unified` 11 and `mdast-util-from-markdown` 2; they are optional for
+core-only consumers.
+
+`MultimdNode` covers table, section, row, cell, and caption nodes. A
+`multimdTable` node retains the core `model`; children contain parsed Markdown,
+and `data.hName` / `data.hProperties` describe the HTML structure. Nodes retain
+source positions. Markdown serializers need explicit support for these custom
+nodes to preserve merged cells.
+
+### `multimd-table/marked`
+
+The default export is `markedMultimdTable(options?)`, returning a
+`MarkedExtension` for Marked 18. The exported type `MarkedMultimdTableToken`
+describes the table token's core `model`, `cellTokens`, and `captionTokens`.
+Model ranges are relative to the token's `raw` text after host normalization.
+Marked 18 requires Node.js 20 or later when used in Node.js.
+
+### `multimd-table/markdown-it`
+
+The default export is `markdownItMultimdTable(md, options?)`, a plugin for
+markdown-it 15. It emits native table and content tokens, so existing renderer
+overrides and inline plugins continue to apply.
+
+## Rendering
+
+When customizing components or configuring a sanitizer, preserve the features
+you use:
+
+- `rowSpan` and `colSpan` on `th` / `td`;
+- controlled `text-align` values (`left`, `center`, `right`);
+- the `extend` class for marked columns;
+- `caption`, its `id`, and `caption-side: bottom` for bottom captions.
+
+A sanitizer may strip these elements or properties unless its schema permits
+them. Cell content follows the host's HTML and URL policies.
+
+## Compatibility
+
+Table syntax follows
+[markdown-it-multimd-table](https://github.com/redbug312/markdown-it-multimd-table)
+4.2.3. The host determines inline and block Markdown behavior inside cells.
+Source normalization and container boundaries follow the selected host.
+Adapters are provided for remark/unified 11, Marked 18, and markdown-it 15.
+MDX 3 and react-markdown use the remark adapter.
+
+Marked 18.1.1 can be slow on Bun 1.4.3 for long lists with many continuation
+lines, due to its native Setext-heading detection. This also affects documents
+without tables; use Node or the remark/markdown-it adapter for that workload.
+
+## License
+
+MIT. See [LICENSE](LICENSE) and [NOTICE](NOTICE) for license and upstream
+attribution details.
