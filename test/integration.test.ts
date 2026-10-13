@@ -4,16 +4,13 @@ import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
 import remarkRehype from "remark-rehype";
 import rehypeStringify from "rehype-stringify";
-import MarkdownIt from "markdown-it";
-import upstreamModule from "markdown-it-multimd-table";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ReactMarkdown from "react-markdown";
 import { parseFragment } from "parse5";
 import remarkMultimdTable from "../src/remark.js";
 import { parseTable, expandSection, type Options } from "../src/core.js";
-// 上游 .d.ts 使用旧模块声明；运行时插件签名通过全部差分用例验证。
-const upstream = upstreamModule as unknown as (md: MarkdownIt, options?: Options) => void;
+import { renderReference } from "./reference.js";
 const make = (options: Options = {}) =>
   unified()
     .use(remarkParse)
@@ -53,7 +50,7 @@ for (let flags = 0; flags < 32; flags++) {
   };
   test(`all option combinations ${flags}`, () => {
     for (const source of samples) {
-      const expected = new MarkdownIt().use(upstream, options).render(source);
+      const expected = renderReference(source, options);
       expect(canonical(String(make(options).processSync(source)))).toEqual(canonical(expected));
     }
   });
@@ -92,9 +89,7 @@ test("unsuccessful table lookahead preserves immediate block boundaries", () => 
 test("blockquote tables, surrounding paragraphs, references and GFM cells", () => {
   const source = "before\n\n> A|B\n> -|-\n> ~~old~~|[link][x]\n\nafter\n\n[x]: https://example.com";
   // 删除线标签是宿主差异：remark-gfm 使用 del，markdown-it 使用 s。
-  const expected = new MarkdownIt()
-    .use(upstream)
-    .render(source)
+  const expected = renderReference(source)
     .replace(/<s>/g, "<del>")
     .replace(/<\/s>/g, "</del>");
   expect(canonical(String(make().processSync(source)))).toEqual(canonical(expected));

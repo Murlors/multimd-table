@@ -1,7 +1,7 @@
 {
   "name": "multimd-table",
-  "version": "0.1.0-beta.1",
-  "description": "Parser-independent MultiMarkdown tables with a native remark adapter",
+  "version": "0.1.0",
+  "description": "Parser-independent MultiMarkdown tables for remark, Marked and markdown-it",
   "homepage": "https://github.com/Murlors/multimd-table#readme",
   "bugs": {
     "url": "https://github.com/Murlors/multimd-table/issues"
@@ -12,8 +12,14 @@
     "url": "https://github.com/Murlors/multimd-table.git"
   },
   "files": [
-    "dist",
-    "src",
+    "dist/core.js",
+    "dist/core.d.ts",
+    "dist/remark.js",
+    "dist/remark.d.ts",
+    "dist/marked.js",
+    "dist/marked.d.ts",
+    "dist/markdown-it.js",
+    "dist/markdown-it.d.ts",
     "LICENSE",
     "NOTICE"
   ],
@@ -27,12 +33,20 @@
     "./remark": {
       "types": "./dist/remark.d.ts",
       "default": "./dist/remark.js"
+    },
+    "./marked": {
+      "types": "./dist/marked.d.ts",
+      "default": "./dist/marked.js"
+    },
+    "./markdown-it": {
+      "types": "./dist/markdown-it.d.ts",
+      "default": "./dist/markdown-it.js"
     }
   },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org",
-    "tag": "beta"
+    "tag": "latest"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -50,12 +64,14 @@
     "micromark-util-types": "^2.0.2"
   },
   "devDependencies": {
+    "@mdx-js/mdx": "3.1.1",
     "@types/bun": "^1.4.3",
-    "@types/markdown-it": "^14.2.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
-    "markdown-it": "13.0.2",
+    "markdown-it": "15.0.2",
     "markdown-it-multimd-table": "4.2.3",
+    "markdown-it-reference": "npm:markdown-it@13.0.2",
+    "marked": "18.1.1",
     "mdast-util-from-markdown": "^2.0.2",
     "parse5": "^7.3.0",
     "react": "^19.1.0",
@@ -74,13 +90,21 @@
   },
   "peerDependencies": {
     "mdast-util-from-markdown": "^2.0.0",
-    "unified": "^11.0.0"
+    "unified": "^11.0.0",
+    "marked": "^18.0.0",
+    "markdown-it": "^15.0.0"
   },
   "peerDependenciesMeta": {
     "unified": {
       "optional": true
     },
     "mdast-util-from-markdown": {
+      "optional": true
+    },
+    "marked": {
+      "optional": true
+    },
+    "markdown-it": {
       "optional": true
     }
   }
