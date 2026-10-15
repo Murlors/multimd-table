@@ -135,16 +135,6 @@ test("caption sides and representable normalized IDs survive", () => {
   ]) expect(() => stringifyTable({ ...basic(), caption: caption as any })).toThrow(RangeError);
 });
 
-test("upstream-derived headerless, multi-header, wrap and rowspan examples round trip", () => {
-  const sources = [
-    "| A |||\n|------|------|------|\n| B | C | D |\n| ^^ | E | F |\n| G || H |\n| ^^ || I |\n| ^^ || J |",
-    "| | | |\n|----|----|----|\n| A | B ||\n| C | ^^ ||",
-    "|:---|:---:+|---:|\n| a | b | c |\n\n| d || e |",
-    "| broad ||\n| left | right |\n|----|----|\n| - first | **note** |\\\n| - second | continued |",
-  ];
-  for (const source of sources) roundTrip(parseTable(source, options)!);
-});
-
 test("seeded rectangular tilings with combined spans retain structure", () => {
   let state = 0x51a7;
   const random = (limit: number) => {

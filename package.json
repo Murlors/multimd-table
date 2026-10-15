@@ -1,7 +1,23 @@
 {
   "name": "multimd-table",
   "version": "0.2.0",
-  "description": "Parser-independent MultiMarkdown tables for remark, Marked and markdown-it",
+  "description": "Parse, render and write MultiMarkdown tables with merged cells, structured data and Markdown ecosystem adapters",
+  "keywords": [
+    "markdown",
+    "multimarkdown",
+    "table",
+    "merged-cells",
+    "rowspan",
+    "colspan",
+    "parser",
+    "serialization",
+    "remark",
+    "remark-plugin",
+    "unified",
+    "marked",
+    "markdown-it",
+    "markdown-it-plugin"
+  ],
   "homepage": "https://github.com/Murlors/multimd-table#readme",
   "bugs": {
     "url": "https://github.com/Murlors/multimd-table/issues"
@@ -22,8 +38,7 @@
     "dist/marked.d.ts",
     "dist/markdown-it.js",
     "dist/markdown-it.d.ts",
-    "LICENSE",
-    "NOTICE"
+    "LICENSE"
   ],
   "type": "module",
   "sideEffects": false,
@@ -75,8 +90,6 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "markdown-it": "15.0.2",
-    "markdown-it-multimd-table": "4.2.3",
-    "markdown-it-reference": "npm:markdown-it@13.0.2",
     "marked": "18.1.1",
     "mdast-util-from-markdown": "^2.0.2",
     "parse5": "^7.3.0",

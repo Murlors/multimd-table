@@ -41,7 +41,9 @@ With `headerless`, a consumed delimiter can be `committed` without being
 
 ### `cellBounds(line)`
 
-Returns UTF-16 pipe boundaries under the scanner's escape and backtick rules.
+Returns UTF-16 pipe boundaries outside escaped pipes and matching backtick code
+spans. Unclosed backtick runs are literal; closing runs must have the same length
+as their opening run.
 Missing outer pipes use virtual boundaries: `-1` and the trimmed line end.
 No valid pipes yields `[]`. Adjacent boundaries delimit raw cell content.
 

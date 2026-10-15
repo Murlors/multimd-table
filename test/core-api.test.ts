@@ -79,7 +79,7 @@ test("separator indentation follows four-column tab stops", () => {
     expect(parseTable(`A|B\n${indent}-|-\nx|y`)).not.toBeNull();
 });
 
-test("the upstream single-pipe separator does not restrict content width", () => {
+test("a single-pipe separator does not restrict content width", () => {
   const table = parseTable("A|B\n|\nx|y")!;
   expect(table.columns).toEqual([]);
   expect(

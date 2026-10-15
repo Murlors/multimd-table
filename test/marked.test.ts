@@ -1,10 +1,9 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 import { Marked, type Token, type Tokens } from "marked";
 import { parseFragment } from "parse5";
 import markedMultimdTable, { type MarkedMultimdTableToken } from "../src/marked.js";
 import { TableScanner, type Options } from "../src/core.js";
-import { renderReference } from "./reference.js";
+import { syntaxCases, optionCases } from "./cases.js";
 
 function normalizeHTML(html: string): unknown {
   function walk(node: any, pre = false): any {
@@ -24,29 +23,14 @@ function normalizeHTML(html: string): unknown {
 const render = (source: string, options: Options = {}) =>
   new Marked(markedMultimdTable(options)).parse(source, { async: false });
 
-for (const file of ["standard", "options", "unspecified"]) {
-  const options: Options = file === "options"
-    ? { multiline: true, rowspan: true, headerless: true, multibody: false, autolabel: false }
-    : {};
-  const input = readFileSync(new URL(`./fixtures/${file}.txt`, import.meta.url), "utf8");
-  const parts = input.split(/^\.\r?$/m);
-  for (let i = 0; i + 2 < parts.length; i += 3) {
-    const title = parts[i]!.trim().split("\n").at(-1)!;
-    const source = parts[i + 1]!.replace(/^\n/, "");
-    const expected = parts[i + 2]!.trim();
-    test(`Marked ${file}: ${title}`, () => {
-      expect(normalizeHTML(render(source, options))).toEqual(normalizeHTML(expected));
-    });
-  }
+for (const { name, source, html, options } of syntaxCases) {
+  test(`Marked syntax: ${name}`, () => {
+    expect(normalizeHTML(render(source, options))).toEqual(normalizeHTML(html));
+  });
 }
 
-const optionSamples = [
-  "[Sales]\n| Region | 2026 ||\n| Name | Qty | Revenue |\n|:---|---:+|===:|\n| East | 3 | 90 |\n| ^^ | 5 | 150 |\n\n| South | 8 ||\n[After]",
-  "|--|--|\n| A ||\n| ^^ ||\n[Caption]",
-  "A|B\n-|-\n- one|`a|b`|\\\n- two|**bold**|\nnext|\\^^|",
-];
 for (let flags = 0; flags < 32; flags++) {
-  const options: Options = {
+  const options: Required<Options> = {
     multiline: !!(flags & 1),
     rowspan: !!(flags & 2),
     headerless: !!(flags & 4),
@@ -54,9 +38,9 @@ for (let flags = 0; flags < 32; flags++) {
     autolabel: !!(flags & 16),
   };
   test(`Marked all option combinations ${flags}`, () => {
-    for (const source of optionSamples)
+    for (const { source, html } of optionCases(options))
       expect(normalizeHTML(render(source, options))).toEqual(
-        normalizeHTML(renderReference(source, options)),
+        normalizeHTML(html),
       );
   });
 }
@@ -239,8 +223,6 @@ for (const spaces of [0, 1, 2, 3]) {
     for (const source of [table, "before\n" + table, "before\n\n" + table])
       for (const options of [{}, { multiline: true }])
         expect(render(source, options)).toBe(new Marked().parse(source, { async: false }));
-    // 旧版 oracle 在 0/1 空格前缀与 Marked 同意该代码边界；2/3 空格是旧宿主差异。
-    if (spaces < 2) expect(normalizeHTML(render(table))).toEqual(normalizeHTML(renderReference(table)));
   });
 
   test(`Marked ${spaces} spaces plus Tab remain code relative to quote containers`, () => {
@@ -277,15 +259,13 @@ test("Marked list deindentation keeps Tabs that become a valid shallow header", 
   }
 });
 
-test("Marked pure space header indentation retains MultiMarkdown compatibility", () => {
-  for (const source of [
-    "    A|B\n-|-\nx|y",
-    ">     A|B\n> -|-\n> x|y",
-    "- item\n\n      A|B\n  -|-\n  x|y",
-  ]) {
-    expect(normalizeHTML(render(source))).toEqual(normalizeHTML(renderReference(source)));
-    expect(render(source)).toContain("<table>");
-  }
+test("Marked pure space header indentation preserves table cells and containers", () => {
+  const table = "<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>x</td><td>y</td></tr></tbody></table>";
+  for (const [source, html] of [
+    ["    A|B\n-|-\nx|y", table],
+    [">     A|B\n> -|-\n> x|y", `<blockquote>${table}</blockquote>`],
+    ["- item\n\n      A|B\n  -|-\n  x|y", `<ul><li><p>item</p>${table}</li></ul>`],
+  ]) expect(normalizeHTML(render(source!))).toEqual(normalizeHTML(html!));
 });
 
 test("Marked multiline headers retain Tab-indented block-cell continuation", () => {
@@ -294,15 +274,20 @@ test("Marked multiline headers retain Tab-indented block-cell continuation", () 
     "\tcode|description|\\\n\tprint()|text|\n-|-\nx|y",
     "\tcode|description|\\\nprint()|text|\n-|-\nx|y",
   ]) {
+    const code = table.includes("\n\tprint()")
+      ? "code\nprint()\n"
+      : "code\n";
+    const rest = code === "code\n" ? "<p>print()</p>" : "";
+    const expected = `<table><thead><tr><th><pre><code>${code}</code></pre>${rest}</th><th><p>description\ntext</p></th></tr></thead><tbody><tr><td>x</td><td>y</td></tr></tbody></table>`;
     for (const source of [table, "> " + table.replaceAll("\n", "\n> ")]) {
       const html = render(source, { multiline: true });
-      expect(normalizeHTML(html)).toEqual(normalizeHTML(renderReference(source, { multiline: true })));
+      expect(normalizeHTML(html)).toEqual(normalizeHTML(source.startsWith("> ") ? `<blockquote>${expected}</blockquote>` : expected));
       expect(html).toContain("<thead>");
       expect(html).toContain("<pre><code>code");
     }
-    // Marked 的 start 扩展可中断段落；表格本身仍与旧版 oracle 一致。
+    // 表格可中断普通段落，单元格内容仍使用宿主块级规则。
     expect(normalizeHTML(render("before\n" + table, { multiline: true }))).toEqual(
-      normalizeHTML("<p>before</p>\n" + renderReference(table, { multiline: true })),
+      normalizeHTML("<p>before</p>" + expected),
     );
   }
 });

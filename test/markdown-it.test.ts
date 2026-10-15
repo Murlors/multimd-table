@@ -1,10 +1,9 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 import MarkdownIt from "markdown-it";
 import { parseFragment, type DefaultTreeAdapterMap } from "parse5";
 import markdownItMultimdTable from "../src/markdown-it.js";
 import type { Options } from "../src/core.js";
-import { renderReference } from "./reference.js";
+import { syntaxCases, optionCases } from "./cases.js";
 
 function normalize(html: string): unknown {
   const walk = (node: DefaultTreeAdapterMap["node"], pre = false): unknown => {
@@ -31,40 +30,15 @@ function normalize(html: string): unknown {
   return walk(parseFragment(html));
 }
 
-for (const file of ["standard", "options", "unspecified"]) {
-  const options: Options =
-    file === "options"
-      ? {
-          multiline: true,
-          rowspan: true,
-          headerless: true,
-          multibody: false,
-          autolabel: false,
-        }
-      : {};
-  const parts = readFileSync(
-    new URL(`./fixtures/${file}.txt`, import.meta.url),
-    "utf8",
-  ).split(/^\.\r?$/m);
-  for (let index = 0; index + 2 < parts.length; index += 3) {
-    const title = parts[index]!.trim().split("\n").at(-1)!;
-    const source = parts[index + 1]!.replace(/^\n/, "");
-    const expected = parts[index + 2]!.trim();
-    test(`markdown-it ${file}: ${title}`, () => {
-      const actual = new MarkdownIt().use(markdownItMultimdTable, options).render(source);
-      expect(normalize(actual)).toEqual(normalize(expected));
-      expect(normalize(actual)).toEqual(normalize(renderReference(source, options)));
-    });
-  }
+for (const { name, source, html, options } of syntaxCases) {
+  test(`markdown-it syntax: ${name}`, () => {
+    const actual = new MarkdownIt().use(markdownItMultimdTable, options).render(source);
+    expect(normalize(actual)).toEqual(normalize(html));
+  });
 }
 
-const optionSamples = [
-  "[Sales][report]\n| Region | 2026 ||\n| Name | Qty | Revenue |\n|:---|---:+|===:|\n| 华东😀 | 3 | 90 |\n| ^^ | 5 | 150 |\n\n| 华南 | 8 ||\n[After]",
-  "|--|--|\n| A ||\n| ^^ ||\n[说明]",
-  "A|B\n-|-\n- one|`a|b`|\\\n- two|**bold**|\nnext|\\^^|",
-];
 for (let flags = 0; flags < 32; flags++) {
-  const options: Options = {
+  const options: Required<Options> = {
     multiline: !!(flags & 1),
     rowspan: !!(flags & 2),
     headerless: !!(flags & 4),
@@ -73,8 +47,8 @@ for (let flags = 0; flags < 32; flags++) {
   };
   test(`markdown-it all option combinations ${flags}`, () => {
     const md = new MarkdownIt().use(markdownItMultimdTable, options);
-    for (const source of optionSamples)
-      expect(normalize(md.render(source))).toEqual(normalize(renderReference(source, options)));
+    for (const { source, html } of optionCases(options))
+      expect(normalize(md.render(source))).toEqual(normalize(html));
   });
 }
 
@@ -161,7 +135,12 @@ test("markdown-it malformed lookahead and outer fenced/code blocks retain host b
 test("markdown-it container boundaries and Tab expansion preserve cells and source maps", () => {
   const source = "before\n\n> - list\n>\n>   [title]\n>   A|B\n>   -|-\n>   - one|first|\\\n>   - two|second|\n>\n>   x|y\n\nafter";
   const md = new MarkdownIt().use(markdownItMultimdTable, { multiline: true });
-  expect(normalize(md.render(source))).toEqual(normalize(renderReference(source, { multiline: true })));
+  expect(normalize(md.render(source))).toEqual(normalize(
+    '<p>before</p><blockquote><ul><li><p>list</p><table><caption id="title">title</caption>' +
+    '<thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td><ul><li>one</li><li>two</li></ul></td>' +
+    '<td><p>first\nsecond</p></td></tr></tbody><tbody><tr><td>x</td><td>y</td></tr></tbody>' +
+    '</table></li></ul></blockquote><p>after</p>',
+  ));
   const tokens = md.parse(source, {});
   expect(tokens.find((token) => token.type === "table_open")?.map).toEqual([4, 11]);
   expect(tokens.find((token) => token.type === "caption_open")?.map).toEqual([4, 5]);
@@ -244,8 +223,10 @@ test("markdown-it leaves pipe-bearing fenced and HTML openers with their host ru
     expect(md.parse(source, {}).some((token) => token.type === "table_open"))
       .toBe(false);
   }
-  for (const source of ["# heading|B\n-|-\nx|y", "- list|B\n-|-\nx|y"])
-    expect(normalize(md.render(source))).toEqual(normalize(renderReference(source)));
+  for (const header of ["# heading", "- list"])
+    expect(normalize(md.render(`${header}|B\n-|-\nx|y`))).toEqual(normalize(
+      `<table><thead><tr><th>${header}</th><th>B</th></tr></thead><tbody><tr><td>x</td><td>y</td></tr></tbody></table>`,
+    ));
   expect(new MarkdownIt().use(markdownItMultimdTable)
     .render("<div>header|pipe\n-|-\nx|y")).toContain("<table>");
 });

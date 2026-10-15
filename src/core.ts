@@ -1,4 +1,4 @@
-/** 与上游 4.2.3 一致；行合并、多行内容和无表头须显式开启。 */
+/** 表格扩展选项；跨行合并、多行内容和无表头模式须显式开启。 */
 export interface Options {
   multiline?: boolean;
   rowspan?: boolean;
@@ -6,6 +6,8 @@ export interface Options {
   multibody?: boolean;
   autolabel?: boolean;
 }
+
+/** 默认保留独立正文分区，并为标题生成标识符。 */
 export const defaults: Readonly<Required<Options>> = Object.freeze({
   multiline: false,
   rowspan: false,
@@ -13,34 +15,26 @@ export const defaults: Readonly<Required<Options>> = Object.freeze({
   multibody: true,
   autolabel: true,
 });
+
 export type Alignment = "left" | "center" | "right" | null;
-/** UTF-16 半开区间，与 JavaScript 字符串和 unist offset 保持一致。 */
-export interface Range {
-  start: number;
-  end: number;
-}
+
+/** UTF-16 半开区间，可直接用于 JavaScript 字符串切片。 */
+export interface Range { start: number; end: number }
 export interface Cell {
   column: number;
   colspan: number;
   rowspan: number;
   align: Alignment;
   wrap: boolean;
-  /** 原始 Markdown 内容；由宿主解析内联/块级语法。 */
+  /** 未解释的 Markdown；内联和块级语义由宿主处理。 */
   value: string;
   block: boolean;
-  /** 多行单元格的各段源文位置，不包含管道符。 */
+  /** 内容各物理行的位置；以换行符连接对应切片即可还原 value。 */
   segments: Range[];
   range: Range;
 }
-export interface Row {
-  cells: Cell[];
-  range: Range;
-}
-export interface Section {
-  kind: "head" | "body";
-  rows: Row[];
-  range: Range;
-}
+export interface Row { cells: Cell[]; range: Range }
+export interface Section { kind: "head" | "body"; rows: Row[]; range: Range }
 export interface Caption {
   value: string;
   id: string | null;
@@ -55,347 +49,318 @@ export interface Table {
   sections: Section[];
   range: Range;
 }
-interface Line {
-  value: string;
-  offset: number;
+
+/** 索引反引号串及其同长度闭合位置，供单元格边界和标题共用。 */
+function backtickRuns(line: string): Map<number, { end: number; close?: number }> {
+  const ticks = new Map<number, { end: number; close?: number }>();
+  const following = new Map<number, number>();
+  const runs: { start: number; end: number }[] = [];
+  for (let index = 0; index < line.length;) {
+    if (line[index] !== "`") { index++; continue; }
+    const start = index;
+    while (line[index] === "`") index++;
+    runs.push({ start, end: index });
+  }
+  for (let index = runs.length - 1; index >= 0; index--) {
+    const run = runs[index]!;
+    const length = run.end - run.start;
+    ticks.set(run.start, { end: run.end, close: following.get(length) });
+    // 转义只消耗第一个反引号，余下部分仍可能成为代码片段的起始串。
+    if (length > 1)
+      ticks.set(run.start + 1, { end: run.end, close: following.get(length - 1) });
+    following.set(length, run.end);
+  }
+  return ticks;
 }
-interface RawRow {
-  line: Line;
-  bounds: number[];
-  continued: boolean;
-  kind: "head" | "body";
-  group: number;
-  parts?: RawRow[];
-}
-type Phase =
-  "start" | "caption" | "headers" | "bodyStart" | "body" | "gap" | "done";
 
 /**
- * 返回行内 UTF-16 管道边界，遵循上游的代码与转义规则。
- * 无外侧管道时补入 -1 或去尾空白后的行尾偏移；相邻边界之间是单元格原文。
+ * 扫描未转义且位于代码片段外的管道符。
+ * 反引号必须以相同长度的连续串闭合；未闭合串不屏蔽后续管道。
+ * 缺少外侧管道时补入 -1 和去尾空白后的行尾偏移。
  */
 export function cellBounds(line: string): number[] {
-  const start = line.search(/\S|$/);
-  const end = line.trimEnd().length;
-  const bounds: number[] = [];
-  let escaped = false,
-    code = false,
-    serial = 0;
-  for (let pos = start; pos < end; pos++) {
-    const char = line[pos];
-    if (char === "\\") {
-      escaped = true;
-      continue;
-    }
-    if (char === "`") {
-      let next = pos;
-      while (line[next + 1] === "`") next++;
-      if (next > pos) {
-        if (!code) {
-          if (serial === 0) serial = next - pos;
-          else if (serial === next - pos) serial = 0;
-        }
-        pos = next;
-      } else if (code || (!escaped && !serial)) code = !code;
-    } else if (char === "|" && !code && !escaped) bounds.push(pos);
-    escaped = false;
+  const ticks = backtickRuns(line);
+  const pipes: number[] = [];
+  for (let index = 0; index < line.length;) {
+    if (line[index] === "\\") { index += 2; continue; }
+    const run = ticks.get(index);
+    if (run) { index = run.close ?? run.end; continue; }
+    if (line[index] === "|") pipes.push(index);
+    index++;
   }
-  if (!bounds.length) return bounds;
-  // 保留首列缩进，供多行单元格的块级 Markdown 使用。
-  if (bounds[0]! > 0) bounds.unshift(-1);
-  if (bounds[bounds.length - 1]! < end - 1) bounds.push(end);
-  return bounds;
+  if (!pipes.length) return [];
+  const end = line.trimEnd().length;
+  if (pipes[0] !== 0) pipes.unshift(-1);
+  if (pipes[pipes.length - 1] !== end - 1) pipes.push(end);
+  return pipes;
 }
 
-function separator(value: string, bounds: number[]): Table["columns"] | null {
-  // Tab 推进到下一个四列缩进点；前面有一至三个空格时同样属于代码缩进。
-  if (/^(?: {4}| {0,3}\t)/.test(value)) return null;
-  // 上游允许单个管道作为零列分隔行；正文列数不由分隔行限制。
-  if (bounds.length === 0) return null;
+interface PhysicalRow { text: string; offset: number; continued: boolean }
+interface RowGroup { kind: Section["kind"]; rows: PhysicalRow[][] }
+
+/** 分隔行最多允许三列空白缩进；Tab 按四列制表位计数。 */
+function delimiter(text: string): Table["columns"] | null {
+  let indent = 0;
+  for (const character of text) {
+    if (character === " ") indent++;
+    else if (character === "\t") indent += 4 - indent % 4;
+    else break;
+  }
+  if (indent >= 4) return null;
+  const bounds = cellBounds(text);
+  if (!bounds.length) return null;
   const columns: Table["columns"] = [];
-  for (let i = 0; i < bounds.length - 1; i++) {
-    const text = value.slice(bounds[i]! + 1, bounds[i + 1]).trim();
-    if (!/^:?(-+|=+):?\+?$/.test(text)) return null;
-    const wrap = text.endsWith("+");
-    const marker = wrap ? text.slice(0, -1) : text;
-    const left = marker.startsWith(":"),
-      right = marker.endsWith(":");
+  for (let index = 1; index < bounds.length; index++) {
+    const value = text.slice(bounds[index - 1]! + 1, bounds[index]).trim();
+    if (!/^:?(?:-+|=+):?\+?$/.test(value)) return null;
+    const marker = value.replace(/\+$/, "");
     columns.push({
-      align: left && right ? "center" : left ? "left" : right ? "right" : null,
-      wrap,
+      align: marker.startsWith(":")
+        ? marker.endsWith(":") ? "center" : "left"
+        : marker.endsWith(":") ? "right" : null,
+      wrap: value.endsWith("+"),
     });
   }
   return columns;
 }
 
-/** 增量表格识别器。宿主负责代码围栏、列表、引用等外层 Markdown 边界。 */
+/** 只识别完整的外层方括号；内部链接与转义括号保留原文。 */
+function captionAt(text: string, offset: number, autolabel: boolean): Caption | null {
+  const start = text.length - text.trimStart().length;
+  if (text[start] !== "[") return null;
+  const ticks = backtickRuns(text);
+  let depth = 1;
+  let end = start + 1;
+  for (; end < text.length; end++) {
+    if (text[end] === "\\") { end++; continue; }
+    const run = ticks.get(end);
+    if (run) { end = (run.close ?? run.end) - 1; continue; }
+    if (text[end] === "[") depth++;
+    if (text[end] === "]" && --depth === 0) break;
+  }
+  if (depth !== 0) return null;
+  const suffix = text.slice(end + 1).trim();
+  if (suffix && !/^\[[^\[\]\r\n]+\]$/.test(suffix)) return null;
+  const content = text.slice(start + 1, end);
+  if (!content.trim()) return null;
+  return {
+    value: content,
+    id: suffix
+      ? suffix.slice(1, -1).toLowerCase().replace(/\W/g, "")
+      : autolabel ? content.toLowerCase().replace(/\W/g, "") : null,
+    side: "top",
+    range: { start: offset, end: offset + text.length },
+    contentRange: { start: offset + start + 1, end: offset + end },
+  };
+}
+
+/**
+ * 增量识别物理行，并在 finish 时构建独立模型。
+ * 外层 Markdown 边界归宿主所有；拒绝输入不会更改已接收状态。
+ */
 export class TableScanner {
   readonly options: Required<Options>;
-  private phase: Phase = "start";
-  private rows: RawRow[] = [];
   private columns: Table["columns"] | null = null;
+  private groups: RowGroup[] = [];
+  private continuation: PhysicalRow[] | null = null;
   private caption: Caption | null = null;
-  private group = 0;
-  private firstOffset = 0;
+  private gap = false;
+  private firstOffset: number | null = null;
   private endOffset = 0;
-  constructor(options: Options = {}) {
-    this.options = { ...defaults, ...options };
-  }
+  private closed = false;
 
-  /** 已有分隔行和至少一行内容，finish() 可返回模型。 */
-  get accepted(): boolean {
-    return this.columns !== null && this.rows.length > 0;
-  }
-  /** 后置标题已终结表格；普通拒绝和 finish() 不会关闭识别器。 */
-  get finished(): boolean {
-    return this.phase === "done";
-  }
-  /** 已消费分隔行；无表头且尚无正文时可能仍未 accepted。 */
-  get committed(): boolean {
-    return this.columns !== null;
-  }
+  constructor(options: Options = {}) { this.options = { ...defaults, ...options }; }
 
-  /** 消费不含换行符的一行及其 UTF-16 源偏移；拒绝时不修改状态，便于宿主回退。 */
-  push(value: string, offset: number): boolean {
-    if (this.finished) return false;
-    const captionAllowed =
-      this.phase === "start" ||
-      this.phase === "bodyStart" ||
-      this.phase === "body" ||
-      this.phase === "gap";
-    const captionMatch = captionAllowed
-      ? /^\s*\[(.+?)\](\[([^\[\]]+)\])?\s*$/.exec(value)
-      : null;
-    if (captionAllowed && captionMatch) {
-      // 上游优先前置标题；后置标题保留在表格外。
-      if (this.caption) return false;
-      const top = this.phase === "start";
-      this.caption = {
-        value: captionMatch[1]!,
-        id:
-          !this.options.autolabel && !captionMatch[2]
-            ? null
-            : (captionMatch[2] || captionMatch[1]!)
-                .toLowerCase()
-                .replace(/\W+/g, ""),
-        side: top ? "top" : "bottom",
-        range: { start: offset, end: offset + value.length },
-        contentRange: {
-          start: offset + value.indexOf("[") + 1,
-          end: offset + value.indexOf("[") + 1 + captionMatch[1]!.length,
-        },
-      };
-      if (top) this.firstOffset = offset;
-      this.endOffset = offset + value.length;
-      this.phase = top ? "caption" : "done";
+  /** 分隔行与至少一行内容均已接收。 */
+  get accepted(): boolean { return this.committed && this.groups.length > 0; }
+  /** 后置标题关闭表格，普通拒绝和快照操作不会关闭。 */
+  get finished(): boolean { return this.closed; }
+  /** 已接收分隔行；无表头模式可以尚未接收到正文。 */
+  get committed(): boolean { return this.columns !== null; }
+
+  /** 接收不含换行符的源行，offset 使用原始文档的 UTF-16 偏移。 */
+  push(text: string, offset: number): boolean {
+    if (this.closed) return false;
+    if (!text.trim()) {
+      const body = this.groups.at(-1);
+      if (!this.options.multibody || this.gap || this.continuation || body?.kind !== "body")
+        return false;
+      this.gap = true;
       return true;
     }
-    const canSeparate =
-      this.phase === "headers" ||
-      (this.options.headerless &&
-        (this.phase === "start" || this.phase === "caption"));
-    const bounds = cellBounds(value);
-    const columns = canSeparate ? separator(value, bounds) : null;
-    if (columns) {
-      if (this.phase === "start") this.firstOffset = offset;
-      this.columns = columns;
-      this.phase = "bodyStart";
-      this.group++;
-      this.endOffset = offset + value.length;
-      return true;
+    if (!this.committed) {
+      const columns = delimiter(text);
+      if (columns !== null) {
+        if (!this.groups.length && !this.options.headerless) return false;
+        // 分隔行结束表头；未闭合的表头续行在快照中逐行回退。
+        this.continuation = null;
+        this.columns = columns;
+        this.recordExtent(offset, text.length);
+        return true;
+      }
     }
-    if (!value.trim()) {
-      if (this.phase !== "body" || !this.options.multibody) return false;
-      this.phase = "gap";
-      this.group++;
-      return true;
+    if (!this.continuation) {
+      const caption = captionAt(text, offset, this.options.autolabel);
+      if (caption) {
+        if (this.caption || this.gap || (!this.committed && this.groups.length > 0)) return false;
+        if (this.committed && !this.accepted) return false;
+        caption.side = this.committed ? "bottom" : "top";
+        this.caption = caption;
+        this.closed = this.committed;
+        this.recordExtent(offset, text.length);
+        return true;
+      }
     }
-    // 上游先验证原始行，再移除续行反斜杠。
-    if (bounds.length < 2) return false;
-    const continued = this.options.multiline && value.endsWith("\\");
-    const content = continued ? value.slice(0, -1).trimEnd() : value;
-    const kind = this.columns ? "body" : "head";
-    if (this.phase === "start") this.firstOffset = offset;
-    this.rows.push({
-      line: { value, offset },
-      bounds: continued ? cellBounds(content) : bounds,
-      continued,
-      kind,
-      group: this.group,
-    });
-    this.endOffset = offset + value.length;
-    this.phase = kind === "head" ? "headers" : "body";
+    if (cellBounds(text).length < 2) return false;
+    const line = { text, offset, continued: this.options.multiline && text.endsWith("\\") };
+    if (this.continuation) this.continuation.push(line);
+    else {
+      const kind = this.committed ? "body" : "head";
+      let group = this.groups.at(-1);
+      if (!group || group.kind !== kind || this.gap) {
+        group = { kind, rows: [] };
+        this.groups.push(group);
+      }
+      const row = [line];
+      group.rows.push(row);
+      this.continuation = row;
+    }
+    this.gap = false;
+    if (!line.continued) this.continuation = null;
+    this.recordExtent(offset, text.length);
     return true;
   }
 
-  /** 返回独立模型快照，不关闭识别器；可重复调用或继续 push，内容不会执行或转换成 HTML。 */
+  private recordExtent(offset: number, length: number): void {
+    this.firstOffset ??= offset;
+    this.endOffset = offset + length;
+  }
+
+  /** 返回无共享可变状态的模型快照；未闭合续行按独立物理行保留。 */
   finish(): Table | null {
     if (!this.accepted) return null;
-    const rawRows: RawRow[] = [];
-    for (let i = 0; i < this.rows.length; i++) {
-      const row = this.rows[i]!;
-      if (row.continued) {
-        let end = i;
-        while (
-          end < this.rows.length &&
-          this.rows[end]!.continued &&
-          this.rows[end]!.group === row.group
-        )
-          end++;
-        if (end < this.rows.length && this.rows[end]!.group === row.group) {
-          rawRows.push({ ...row, parts: this.rows.slice(i, end + 1) });
-          i = end;
-          continue;
-        }
-        // 未闭合的续行串按普通行保留，避免每一行重新扫描同一后缀。
-        for (let pending = i; pending < end; pending++)
-          rawRows.push(this.rows[pending]!);
-        i = end - 1;
-        continue;
-      }
-      rawRows.push(row);
-    }
-    const sections: Section[] = [];
-    let group = -1;
-    let above: (Cell | undefined)[] = [];
-    for (const raw of rawRows) {
-      const last = raw.parts?.at(-1) || raw;
-      const row: Row = {
-        cells: [],
-        range: {
-          start: raw.line.offset,
-          end: last.line.offset + last.line.value.length,
-        },
+    const columns = this.columns!.map((column) => ({ ...column }));
+    const sections = this.groups.map((group): Section => {
+      const rows = group.rows.flatMap((lines) => lines.at(-1)!.continued
+        ? lines.map((line) => materializeRow([line], false, columns))
+        : [materializeRow(lines, lines.length > 1, columns)]);
+      if (this.options.rowspan) mergeRows(rows);
+      return {
+        kind: group.kind,
+        rows,
+        range: { start: rows[0]!.range.start, end: rows.at(-1)!.range.end },
       };
-      if (raw.group !== group) {
-        group = raw.group;
-        above = [];
-        sections.push({ kind: raw.kind, rows: [], range: { ...row.range } });
-      }
-      let left: Cell | undefined;
-      for (let column = 0; column < raw.bounds.length - 1; column++) {
-        const start = raw.bounds[column]! + 1,
-          end = raw.bounds[column + 1]!;
-        const text = raw.line.value.slice(start, end);
-        if (text === "") {
-          if (left) left.colspan++;
-          continue;
-        }
-        if (this.options.rowspan && above[column] && text.trim() === "^^") {
-          above[column]!.rowspan++;
-          left = undefined;
-          continue;
-        }
-        const block = !!raw.parts;
-        const segments: Range[] = [];
-        let value: string;
-        if (raw.parts) {
-          const values: string[] = [];
-          for (const part of raw.parts) {
-            if (column >= part.bounds.length - 1) continue;
-            const a = part.bounds[column]! + 1;
-            const content = part.line.value
-              .slice(a, part.bounds[column + 1])
-              .trimEnd();
-            segments.push({
-              start: part.line.offset + a,
-              end: part.line.offset + a + content.length,
-            });
-            values.push(content);
-          }
-          value = values.join("\n");
-        } else {
-          // 普通单元格复用已切出的文本，不为单段内容构造临时数组。
-          const leading = text.length - text.trimStart().length;
-          value = text.trim();
-          segments.push({
-            start: raw.line.offset + start + leading,
-            end: raw.line.offset + start + leading + value.length,
-          });
-        }
-        const cell: Cell = {
-          column,
-          colspan: 1,
-          rowspan: 1,
-          align: this.columns![column]?.align || null,
-          wrap: this.columns![column]?.wrap || false,
-          block,
-          value,
-          segments,
-          range: {
-            start: raw.line.offset + start,
-            end:
-              last.line.offset +
-              (last.bounds[column + 1] ?? last.line.value.length),
-          },
-        };
-        row.cells.push(cell);
-        left = above[column] = cell;
-      }
-      sections.at(-1)!.rows.push(row);
-      sections.at(-1)!.range.end = row.range.end;
-    }
+    });
     return {
       type: "multimdTable",
-      columns: this.columns!.map((column) => ({ ...column })),
-      caption: this.caption
-        ? {
-            ...this.caption,
-            range: { ...this.caption.range },
-            contentRange: { ...this.caption.contentRange },
-          }
-        : null,
+      columns,
+      caption: this.caption ? {
+        ...this.caption,
+        range: { ...this.caption.range },
+        contentRange: { ...this.caption.contentRange },
+      } : null,
       sections,
-      range: { start: this.firstOffset, end: this.endOffset },
+      range: { start: this.firstOffset!, end: this.endOffset },
     };
   }
 }
 
-/** 从字符串开头解析一个表格；非表格返回 null，不负责寻找文档中的表格。 */
-export function parseTable(
-  source: string,
-  options: Options = {},
-): Table | null {
+/** 将完整逻辑行映射为单元格；首行决定列数，后续物理行只补充内容。 */
+function materializeRow(lines: PhysicalRow[], block: boolean, columns: Table["columns"]): Row {
+  const pieces = lines.map((line) => {
+    const text = line.continued ? line.text.slice(0, -1) : line.text;
+    const bounds = cellBounds(text);
+    return Array.from({ length: Math.max(0, bounds.length - 1) }, (_, index) => ({
+      raw: text.slice(bounds[index]! + 1, bounds[index + 1]),
+      offset: line.offset + bounds[index]! + 1,
+    }));
+  });
+  const cells: Cell[] = [];
+  for (let column = 0; column < pieces[0]!.length; column++) {
+    const initial = pieces[0]![column]!;
+    if (!initial.raw.length) {
+      const previous = cells.at(-1);
+      if (previous && previous.column + previous.colspan === column) previous.colspan++;
+      continue;
+    }
+    const segments: Range[] = [];
+    const values: string[] = [];
+    for (const line of pieces) {
+      const piece = line[column];
+      if (!piece) continue;
+      const value = block ? piece.raw.trimEnd() : piece.raw.trim();
+      const begin = block ? 0 : piece.raw.length - piece.raw.trimStart().length;
+      segments.push({ start: piece.offset + begin, end: piece.offset + begin + value.length });
+      values.push(value);
+    }
+    cells.push({
+      column,
+      colspan: 1,
+      rowspan: 1,
+      align: columns[column]?.align ?? null,
+      wrap: columns[column]?.wrap ?? false,
+      value: values.join("\n"),
+      block,
+      segments,
+      range: { start: segments[0]!.start, end: segments.at(-1)!.end },
+    });
+  }
+  return {
+    cells,
+    range: { start: lines[0]!.offset, end: lines.at(-1)!.offset + lines.at(-1)!.text.length },
+  };
+}
+
+/** 合并只发生在当前分区；解析保留宽松网格，完整覆盖由 writer 校验。 */
+function mergeRows(rows: Row[]): void {
+  let previous = new Map<number, Cell>();
+  for (const row of rows) {
+    const current = new Map<number, Cell>();
+    const extended = new Set<Cell>();
+    row.cells = row.cells.filter((cell) => {
+      const above = previous.get(cell.column);
+      const inherited = cell.value.trim() === "^^" && above !== undefined;
+      const origin = inherited ? above : cell;
+      for (let column = cell.column; column < cell.column + cell.colspan; column++)
+        current.set(column, origin);
+      if (inherited && !extended.has(above)) {
+        above.rowspan++;
+        extended.add(above);
+      }
+      return !inherited;
+    });
+    previous = current;
+  }
+}
+
+/** 从字符串开头读取一个表格，首个被拒绝的物理行及其后内容归调用方。 */
+export function parseTable(source: string, options: Options = {}): Table | null {
   const scanner = new TableScanner(options);
-  let offset = 0;
-  // 只扫描表格及第一条被拒绝的行，避免为无关文档后缀分配整份行数组。
-  const newline = /\r\n|\r|\n/g;
-  while (offset <= source.length) {
-    const match = newline.exec(source);
-    const end = match ? match.index : source.length;
-    const line = source.slice(offset, end);
-    if (!scanner.push(line, offset)) break;
-    if (!match || scanner.finished) break;
-    offset = newline.lastIndex;
+  const lines = /([^\r\n]*)(\r\n|\r|\n|$)/g;
+  for (const match of source.matchAll(lines)) {
+    if (!match[0].length || !scanner.push(match[1]!, match.index!)) break;
+    if (scanner.finished) break;
   }
   return scanner.finish();
 }
 
-export interface ExpandedCell {
-  value: string;
-  origin: Cell;
-  inherited: boolean;
-}
-/** 展开只补齐位置关系，不推断合计/分组语义；保留 origin，消费者可避免重复计数。 */
+export interface ExpandedCell { value: string; origin: Cell; inherited: boolean }
+
+/** 按分区展开合并范围，空洞保留 null；origin 指向输入模型，位置对象各自独立。 */
 export function expandSection(section: Section): (ExpandedCell | null)[][] {
-  const grid: (ExpandedCell | null)[][] = section.rows.map(() => []);
-  section.rows.forEach((row, r) =>
-    row.cells.forEach((cell) => {
-      for (let dr = 0; dr < cell.rowspan && r + dr < grid.length; dr++) {
-        for (let dc = 0; dc < cell.colspan; dc++) {
-          grid[r + dr]![cell.column + dc] = {
+  const width = section.rows.reduce((width, row) => row.cells.reduce(
+    (width, cell) => Math.max(width, cell.column + cell.colspan), width,
+  ), 0);
+  const grid: (ExpandedCell | null)[][] = section.rows.map(() => Array(width).fill(null));
+  section.rows.forEach((row, rowIndex) => {
+    for (const cell of row.cells)
+      for (let down = 0; down < cell.rowspan && rowIndex + down < grid.length; down++)
+        for (let right = 0; right < cell.colspan; right++)
+          grid[rowIndex + down]![cell.column + right] = {
             value: cell.value,
             origin: cell,
-            inherited: dr > 0 || dc > 0,
+            inherited: down > 0 || right > 0,
           };
-        }
-      }
-    }),
-  );
-  let width = 0;
-  for (const row of grid) width = Math.max(width, row.length);
-  // grid 为本次展开独有，直接补齐空位，避免为矩形结果再次复制每行。
-  for (const row of grid)
-    for (let col = 0; col < width; col++) row[col] ??= null;
+  });
   return grid;
 }

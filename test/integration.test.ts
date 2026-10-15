@@ -10,7 +10,7 @@ import ReactMarkdown from "react-markdown";
 import { parseFragment } from "parse5";
 import remarkMultimdTable from "../src/remark.js";
 import { parseTable, expandSection, type Options } from "../src/core.js";
-import { renderReference } from "./reference.js";
+import { syntaxCases, optionCases } from "./cases.js";
 const make = (options: Options = {}) =>
   unified()
     .use(remarkParse)
@@ -35,13 +35,13 @@ function canonical(html: string): unknown {
         };
   return walk(parseFragment(html));
 }
-const samples = [
-  "[Sales][report]\n| Region | 2026 ||\n| Name | Qty | Revenue |\n|:---|---:+|===:|\n| 华东😀 | 3 | 90 |\n| ^^ | 5 | 150 |\n\n| 华南 | 8 ||\n[After]",
-  "|--|--|\n| A ||\n| ^^ ||\n[说明]",
-  "A|B\n-|-\n- one|`a|b`|\\\n- two|**bold**|\nnext|\\^^|",
-];
+for (const { name, source, html, options } of syntaxCases) {
+  test(`remark syntax: ${name}`, () => {
+    expect(canonical(String(make(options).processSync(source)))).toEqual(canonical(html));
+  });
+}
 for (let flags = 0; flags < 32; flags++) {
-  const options: Options = {
+  const options: Required<Options> = {
     multiline: !!(flags & 1),
     rowspan: !!(flags & 2),
     headerless: !!(flags & 4),
@@ -49,9 +49,8 @@ for (let flags = 0; flags < 32; flags++) {
     autolabel: !!(flags & 16),
   };
   test(`all option combinations ${flags}`, () => {
-    for (const source of samples) {
-      const expected = renderReference(source, options);
-      expect(canonical(String(make(options).processSync(source)))).toEqual(canonical(expected));
+    for (const { source, html } of optionCases(options)) {
+      expect(canonical(String(make(options).processSync(source)))).toEqual(canonical(html));
     }
   });
 }
@@ -88,10 +87,9 @@ test("unsuccessful table lookahead preserves immediate block boundaries", () => 
 });
 test("blockquote tables, surrounding paragraphs, references and GFM cells", () => {
   const source = "before\n\n> A|B\n> -|-\n> ~~old~~|[link][x]\n\nafter\n\n[x]: https://example.com";
-  // 删除线标签是宿主差异：remark-gfm 使用 del，markdown-it 使用 s。
-  const expected = renderReference(source)
-    .replace(/<s>/g, "<del>")
-    .replace(/<\/s>/g, "</del>");
+  const expected = '<p>before</p><blockquote><table><thead><tr><th>A</th><th>B</th></tr></thead>' +
+    '<tbody><tr><td><del>old</del></td><td><a href="https://example.com">link</a></td></tr></tbody>' +
+    '</table></blockquote><p>after</p>';
   expect(canonical(String(make().processSync(source)))).toEqual(canonical(expected));
 });
 test("ReactMarkdown renders native merged elements without raw HTML", () => {

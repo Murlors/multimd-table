@@ -234,8 +234,8 @@ test("cell footnotes and links keep separate identifier namespaces", () => {
   expect(nodes(p.parse("Outside [r] [^r]"), "footnoteReference")).toHaveLength(0);
 });
 
-test("multiline duplicate definitions follow upstream cell parsing order", () => {
-  // 多行块按单元格逐格解析；原插件先读取左格，再读取右格，而非按物理行排序。
+test("multiline duplicate definitions follow cell parsing order", () => {
+  // 宿主按单元格顺序解释块内容，左格定义优先于右格，不以物理行先后排序。
   const source = "A|B\n-|-\n |[r]: /first|\\\n[r]: /second|text|\n\nOutside [r]";
   const html = String(processor().processSync(source));
   expect(html).toContain('<p>Outside <a href="/second">r</a></p>');

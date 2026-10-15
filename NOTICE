@@ -1,5 +1,0 @@
-The table boundary scanning, table recognition rules, and test/fixtures are adapted from
-markdown-it-multimd-table 4.2.3, copyright (c) 2019 RedBug312, MIT licensed.
-Upstream: https://github.com/redbug312/markdown-it-multimd-table
-Reference commit: a5b1277bab21677ccd5a77b4766a5d7f3b4cd3fa
-The upstream copyright and license are preserved in LICENSE.

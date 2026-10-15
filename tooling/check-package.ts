@@ -233,7 +233,7 @@ try {
     }
     assert.match(
       entry,
-      /^package\/(?:package\.json|README\.md|LICENSE|NOTICE|dist\/[\w-]+\.(?:js|d\.ts))$/,
+      /^package\/(?:package\.json|README\.md|LICENSE|dist\/[\w-]+\.(?:js|d\.ts))$/,
       `Unexpected packaged file: ${entry}`,
     );
     const content = run(["tar", "-xOzf", archive, entry], root);
@@ -245,7 +245,6 @@ try {
   const required = [
     "package/package.json",
     "package/LICENSE",
-    "package/NOTICE",
     "package/README.md",
     "package/dist/core.js",
     "package/dist/core.d.ts",
