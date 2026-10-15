@@ -1,29 +1,52 @@
 # multimd-table
 
-MultiMarkdown tables with merged cells, captions, multiple headers and bodies,
-and multiline Markdown. Use **remark**, **Marked**, **markdown-it**, or the
-**parser-independent core**.
+[![npm version](https://img.shields.io/npm/v/multimd-table?logo=npm)](https://www.npmjs.com/package/multimd-table)
+
+**Parse, render, and write rich Markdown tables.**
+
+A TypeScript toolkit for MultiMarkdown tables with merged cells, captions,
+multiple header and body sections, and multiline Markdown.
+
+- **Parse:** get structured data, source ranges, and merged-cell origins from a
+  standalone core.
+- **Render:** integrate with remark, Marked, or markdown-it; use the remark
+  adapter with react-markdown and MDX.
+- **Write:** generate table Markdown from structured data with span validation.
+
+[API reference](https://github.com/Murlors/multimd-table/blob/main/docs/api.md)
 
 ```markdown
-| Region | Quarter | Revenue |
-| ------ | ------- | ------- |
-| North  | Q1      | 12      |
-| ^^     | Q2      | 15      |
-| Total           || 27      |
+[Quarterly sales]
+| Region | Team | Sales ||
+| ^^     | ^^   | Q1 | Q2 |
+| ------ | ---- | -- | -- |
+| North  | A    | 12 | 15 |
+| ^^     | B    |  8 | 10 |
+
+| South  | C    |  9 | 11 |
+| Total         ||| 65 |
 ```
 
 With `{ rowspan: true }`:
 
 <table>
-  <thead><tr><th>Region</th><th>Quarter</th><th>Revenue</th></tr></thead>
+  <caption id="quarterlysales">Quarterly sales</caption>
+  <thead>
+    <tr><th rowspan="2">Region</th><th rowspan="2">Team</th><th colspan="2">Sales</th></tr>
+    <tr><th>Q1</th><th>Q2</th></tr>
+  </thead>
   <tbody>
-    <tr><td rowspan="2">North</td><td>Q1</td><td>12</td></tr>
-    <tr><td>Q2</td><td>15</td></tr>
-    <tr><td colspan="2">Total</td><td>27</td></tr>
+    <tr><td rowspan="2">North</td><td>A</td><td>12</td><td>15</td></tr>
+    <tr><td>B</td><td>8</td><td>10</td></tr>
+  </tbody>
+  <tbody>
+    <tr><td>South</td><td>C</td><td>9</td><td>11</td></tr>
+    <tr><td colspan="3">Total</td><td>65</td></tr>
   </tbody>
 </table>
 
 `^^` extends the cell above; adjacent pipes (`||`) extend the cell to the left.
+The caption labels the table, and the blank line separates its body groups.
 
 ## Install
 
@@ -160,6 +183,18 @@ if (table) {
 }
 ```
 
+First body cell (selected fields):
+
+```json
+{
+  "value": "merged",
+  "column": 0,
+  "colspan": 2,
+  "rowspan": 2,
+  "range": { "start": 8, "end": 14 }
+}
+```
+
 `parseTable` recognizes one table **at the start of the string**, stopping at the
 first rejected line. Cell values remain Markdown strings. Use an adapter for
 whole documents: the core does not handle outer fences, lists or block quotes.
@@ -178,6 +213,14 @@ const source = stringifyTable({
 });
 ```
 
+Generated Markdown:
+
+```markdown
+|---|---:|
+| Merged ||
+| ^^ ||
+```
+
 The writer accepts Markdown strings and a grid without source ranges. It emits
 canonical table syntax, validates complete span coverage, and preserves
 Markdown semantics rather than source whitespace. Read the output with
@@ -191,8 +234,8 @@ Unrepresentable content throws `RangeError`; see the
   pipes when the span reaches the row's end.
 - **Row span:** `^^` with `rowspan: true`; spans stay within a header/body section.
 - **Empty cell:** whitespace between pipes, e.g. `A| |C`. `A||C` is a span.
-- Outer pipes are optional. Escape literal pipes as `\|`; code-span pipes follow
-  the reference parser's backtick rules.
+- Outer pipes are optional. Escape literal pipes as `\|`; pipes inside code spans
+  with matching backtick delimiters do not split cells. Unclosed backticks are literal.
 - Delimiters accept `---` or `===`. Use `:---`, `---:` or `:---:` for alignment;
   append `+` to give the column an `extend` class for your stylesheet.
 - All rows before the delimiter are headers. With `headerless: true`, start with
@@ -252,8 +295,6 @@ Custom components and sanitizers must retain the features you use: `rowSpan`,
 `colSpan`, cell `text-align`, the `extend` class, and `caption` with its `id` and
 bottom `caption-side`. Cell HTML and URLs follow the host's policies.
 
-Table syntax follows
-[markdown-it-multimd-table 4.2.3](https://github.com/redbug312/markdown-it-multimd-table).
 Cell Markdown, source normalization and container boundaries follow the host.
 
 Marked 18.1.1's native Setext-heading detection is slow on Bun 1.4.3 for long lists
@@ -262,4 +303,4 @@ for that workload.
 
 ## License
 
-MIT. See [LICENSE](LICENSE) and [NOTICE](NOTICE) for attribution.
+MIT. See [LICENSE](LICENSE).
