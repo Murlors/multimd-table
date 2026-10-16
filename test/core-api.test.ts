@@ -8,6 +8,55 @@ import rehypeStringify from "rehype-stringify";
 import remarkMultimdTable from "../src/remark.js";
 import { parseFragment, type DefaultTreeAdapterMap } from "parse5";
 
+test("cell ranges retain raw padding while segments locate inline content", () => {
+  for (const eol of ["\n", "\r\n", "\r"]) {
+    const source = ["| H😀 | H2 |", "| --- | --- |", "|  x😀  |  y  |"].join(eol);
+    const table = parseTable(source)!;
+    const cell = table.sections[1]!.rows[0]!.cells[0]!;
+    const start = source.indexOf("  x😀  ");
+    expect(cell.range).toEqual({ start, end: start + "  x😀  ".length });
+    expect(cell.segments).toEqual([{ start: start + 2, end: start + 2 + "x😀".length }]);
+    expect(source.slice(cell.range.start, cell.range.end)).toBe("  x😀  ");
+    expect(cell.segments.map(({ start, end }) => source.slice(start, end)).join("\n")).toBe(cell.value);
+  }
+  const source = "A|B\n-|-\n  left  | right  ";
+  const cells = parseTable(source)!.sections[1]!.rows[0]!.cells;
+  // 无外侧管道时，行尾空白不属于最后一个单元格的边界。
+  expect(cells.map(({ range }) => source.slice(range.start, range.end))).toEqual(["  left  ", " right"]);
+
+  const merged = "A|B\n-|-\n|  origin  ||\n| ^^ ||";
+  const cell = parseTable(merged, { rowspan: true })!.sections[1]!.rows[0]!.cells[0]!;
+  expect(cell).toMatchObject({ colspan: 2, rowspan: 2 });
+  expect(merged.slice(cell.range.start, cell.range.end)).toBe("  origin  ");
+});
+
+test("multiline ranges span raw cell boundaries and retain precise segments", () => {
+  for (const eol of ["\n", "\r\n", "\r"]) {
+    const source = ["A|B", "-|-", "|  one  |  x  |\\", "|  two  |  y  |"].join(eol);
+    const cell = parseTable(source, { multiline: true })!.sections[1]!.rows[0]!.cells[0]!;
+    const start = source.indexOf("  one  ");
+    const end = source.lastIndexOf("  two  ") + "  two  ".length;
+    expect(cell.range).toEqual({ start, end });
+    expect(cell.block).toBe(true);
+    expect(cell.value).toBe("  one\n  two");
+    expect(cell.segments.map(({ start, end }) => source.slice(start, end))).toEqual(["  one", "  two"]);
+    expect(cell.segments[1]!.end).toBeLessThan(cell.range.end);
+  }
+});
+
+test("ragged and unfinished continuations preserve physical range boundaries", () => {
+  const ragged = "A|B\n-|-\n| a | b |\\\n| tail |";
+  const cell = parseTable(ragged, { multiline: true })!.sections[1]!.rows[0]!.cells[1]!;
+  expect(cell.range).toEqual({ start: ragged.indexOf(" b "), end: ragged.length });
+  expect(cell.segments.map(({ start, end }) => ragged.slice(start, end))).toEqual([" b"]);
+
+  const unfinished = "A|B\n-|-\n|  unfinished  | x |\\";
+  const pending = parseTable(unfinished, { multiline: true })!.sections[1]!.rows[0]!.cells[0]!;
+  expect(pending.block).toBe(false);
+  expect(unfinished.slice(pending.range.start, pending.range.end)).toBe("  unfinished  ");
+  expect(pending.value).toBe("unfinished");
+});
+
 test("finish returns independent snapshots and permits further input", () => {
   const scanner = new TableScanner({ rowspan: true });
   for (const [line, offset] of [
@@ -32,6 +81,31 @@ test("finish returns independent snapshots and permits further input", () => {
   expect(next.sections[1]!.rows[0]!.cells[0]!.rowspan).toBe(2);
   expect(next.columns).toEqual(expected.columns);
   expect(expected.sections[1]!.rows[0]!.cells[0]!.rowspan).toBe(1);
+});
+
+test("continuation snapshots stay independent as a logical row grows", () => {
+  const scanner = new TableScanner({ multiline: true });
+  const lines = ["A|B", "-|-", "|first|x|\\", "|second|y|\\", "|last|z|"];
+  let offset = 0;
+  const push = (line: string) => {
+    expect(scanner.push(line, offset)).toBe(true);
+    offset += line.length + 1;
+  };
+  lines.slice(0, 3).forEach(push);
+  const first = scanner.finish()!;
+  const expected = structuredClone(first);
+  expect(first.sections[1]!.rows.map(row => row.cells[0]!.value)).toEqual(["first"]);
+  push(lines[3]!);
+  const pending = scanner.finish()!;
+  expect(pending.sections[1]!.rows.map(row => row.cells[0]!.value)).toEqual(["first", "second"]);
+  pending.sections[1]!.rows[0]!.cells[0]!.value = "changed";
+  push(lines[4]!);
+  const completed = scanner.finish()!.sections[1]!.rows;
+  expect(completed).toHaveLength(1);
+  expect(completed[0]!.cells.map(cell => [cell.block, cell.value])).toEqual([
+    [true, "first\nsecond\nlast"], [true, "x\ny\nz"],
+  ]);
+  expect(first).toEqual(expected);
 });
 
 test("rejection preserves each scanner phase and its source ranges", () => {

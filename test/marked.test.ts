@@ -23,6 +23,20 @@ function normalizeHTML(html: string): unknown {
 const render = (source: string, options: Options = {}) =>
   new Marked(markedMultimdTable(options)).parse(source, { async: false });
 
+function countScan(source: string, options: Options = {}) {
+  const push = TableScanner.prototype.push;
+  let calls = 0;
+  TableScanner.prototype.push = function (value, offset) {
+    calls++;
+    return push.call(this, value, offset);
+  };
+  try {
+    return { html: render(source, options), calls };
+  } finally {
+    TableScanner.prototype.push = push;
+  }
+}
+
 for (const { name, source, html, options } of syntaxCases) {
   test(`Marked syntax: ${name}`, () => {
     expect(normalizeHTML(render(source, options))).toEqual(normalizeHTML(html));
@@ -308,6 +322,33 @@ test("Marked long invalid pipe paragraphs remain one native paragraph", () => {
   expect(marked.parser(tokens)).toBe(new Marked().parse(source, { async: false }));
 });
 
+test("Marked table-free paragraph lookahead grows linearly", () => {
+  for (const quote of [false, true]) {
+    let previousCalls: number | undefined;
+    for (const size of [20, 40, 80]) {
+      const paragraphs = Array.from({ length: size }, (_, i) => `Paragraph ${i} with **text**.`).join("\n\n");
+      const source = quote ? "> " + paragraphs.replaceAll("\n", "\n> ") : paragraphs;
+      const result = countScan(source);
+      expect(result.html).toBe(new Marked().parse(source, { async: false }));
+      if (previousCalls !== undefined) expect(result.calls).toBeLessThanOrEqual(previousCalls * 2.5);
+      previousCalls = result.calls;
+    }
+  }
+});
+
+test("Marked negative lookahead preserves later tables and independent parses", () => {
+  const marked = new Marked(markedMultimdTable());
+  for (const size of [40, 4, 80, 1]) {
+    const prose = Array.from({ length: size }, (_, i) => `Paragraph ${i}.`).join("\n\n");
+    expect(marked.parse(prose, { async: false })).toBe(new Marked().parse(prose, { async: false }));
+    const source = prose + "\n\nA|B\n-|-\nx|y\n\n\n> C|D\n> -|-\n> z|w";
+    const html = marked.parse(source, { async: false });
+    expect(html.match(/<table>/g)).toHaveLength(2);
+    expect(html).toContain("<th>C</th>");
+    expect(html).toContain("<td>z</td>");
+  }
+});
+
 test("Marked invalid list pipe runs preserve fallback and a later table", () => {
   const invalid = Array.from({ length: 300 }, (_, i) => `  row ${i}|value`).join("\n");
   const source = "- intro\n" + invalid + "\n\n  A|B\n  -|-\n  x|y\n\nOutside";
@@ -317,19 +358,6 @@ test("Marked invalid list pipe runs preserve fallback and a later table", () => 
   expect(html).toContain("row 299|value");
   expect(html).toContain("</ul>\n<p>Outside</p>");
 
-  const countScan = (source: string, options: Options = {}) => {
-    const push = TableScanner.prototype.push;
-    let calls = 0;
-    TableScanner.prototype.push = function (value, offset) {
-      calls++;
-      return push.call(this, value, offset);
-    };
-    try {
-      return { html: render(source, options), calls };
-    } finally {
-      TableScanner.prototype.push = push;
-    }
-  };
   for (const tail of [
     "",
     "\n  \t\n  A|B\n  -|-\n  x|y\n\nOutside",

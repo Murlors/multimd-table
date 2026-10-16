@@ -31,6 +31,7 @@ export interface Cell {
   block: boolean;
   /** 内容各物理行的位置；以换行符连接对应切片即可还原 value。 */
   segments: Range[];
+  /** 首尾物理行的原始单元格边界，包含边缘空白；精确内容位置使用 segments。 */
   range: Range;
 }
 export interface Row { cells: Cell[]; range: Range }
@@ -50,27 +51,37 @@ export interface Table {
   range: Range;
 }
 
-/** 索引反引号串及其同长度闭合位置，供单元格边界和标题共用。 */
-function backtickRuns(line: string): Map<number, { end: number; close?: number }> {
-  const ticks = new Map<number, { end: number; close?: number }>();
-  const following = new Map<number, number>();
-  const runs: { start: number; end: number }[] = [];
-  for (let index = 0; index < line.length;) {
-    if (line[index] !== "`") { index++; continue; }
-    const start = index;
-    while (line[index] === "`") index++;
-    runs.push({ start, end: index });
-  }
-  for (let index = runs.length - 1; index >= 0; index--) {
-    const run = runs[index]!;
-    const length = run.end - run.start;
-    ticks.set(run.start, { end: run.end, close: following.get(length) });
-    // 转义只消耗第一个反引号，余下部分仍可能成为代码片段的起始串。
-    if (length > 1)
-      ticks.set(run.start + 1, { end: run.end, close: following.get(length - 1) });
-    following.set(length, run.end);
-  }
-  return ticks;
+/**
+ * 按递增偏移跳过代码片段；未闭合时只跳过起始反引号串。
+ * 成功搜索消费完整片段；首次失败索引后缀各长度的最后位置，避免反复搜索同一后缀。
+ */
+function codeSpanEnd(text: string): (start: number) => number {
+  let complete = false;
+  let last: Map<number, number> | undefined;
+  return (start) => {
+    let end = start + 1;
+    while (text[end] === "`") end++;
+    const length = end - start;
+    if (complete && (last?.get(length) ?? -1) <= start) return end;
+    let cursor = end;
+    while ((cursor = text.indexOf("`", cursor)) !== -1) {
+      let next = cursor + 1;
+      while (text[next] === "`") next++;
+      if (next - cursor === length) return next;
+      // 完整扫描后保留最后位置；后续成功匹配不能用较早位置覆盖它。
+      if (!complete) (last ??= new Map()).set(next - cursor, cursor);
+      cursor = next;
+    }
+    complete = true;
+    return end;
+  };
+}
+
+/** 连续反斜杠为奇数个时，紧随其后的标记被转义。 */
+function escapedAt(text: string, offset: number): boolean {
+  let start = offset;
+  while (text[start - 1] === "\\") start--;
+  return (offset - start) % 2 === 1;
 }
 
 /**
@@ -79,14 +90,21 @@ function backtickRuns(line: string): Map<number, { end: number; close?: number }
  * 缺少外侧管道时补入 -1 和去尾空白后的行尾偏移。
  */
 export function cellBounds(line: string): number[] {
-  const ticks = backtickRuns(line);
+  let pipe = line.indexOf("|");
+  if (pipe === -1) return [];
+  let tick = line.indexOf("`");
+  const skipCode = tick === -1 ? undefined : codeSpanEnd(line);
   const pipes: number[] = [];
-  for (let index = 0; index < line.length;) {
-    if (line[index] === "\\") { index += 2; continue; }
-    const run = ticks.get(index);
-    if (run) { index = run.close ?? run.end; continue; }
-    if (line[index] === "|") pipes.push(index);
-    index++;
+  // 两个游标都只向前移动；普通文本由原生字符串搜索跳过。
+  while (pipe !== -1) {
+    if (tick !== -1 && tick < pipe) {
+      const end = escapedAt(line, tick) ? tick + 1 : skipCode!(tick);
+      if (end > pipe) pipe = line.indexOf("|", end);
+      tick = line.indexOf("`", end);
+    } else {
+      if (!escapedAt(line, pipe)) pipes.push(pipe);
+      pipe = line.indexOf("|", pipe + 1);
+    }
   }
   if (!pipes.length) return [];
   const end = line.trimEnd().length;
@@ -95,11 +113,25 @@ export function cellBounds(line: string): number[] {
   return pipes;
 }
 
-interface PhysicalRow { text: string; offset: number; continued: boolean }
-interface RowGroup { kind: Section["kind"]; rows: PhysicalRow[][] }
+interface PhysicalRow {
+  text: string;
+  offset: number;
+  continued: boolean;
+  /** 接收时缓存去掉续行标记后的边界，构造快照时复用。 */
+  bounds: number[];
+}
+/** 普通逻辑行直接使用首行；只有实际续行时才分配后继列表。 */
+interface LogicalRow extends PhysicalRow { following?: PhysicalRow[] }
+interface RowGroup { kind: Section["kind"]; rows: LogicalRow[] }
+/** 同一锚点在每个逻辑行只扩展一次；状态随分区结束释放。 */
+interface RowSpans {
+  previous: (Cell | undefined)[];
+  extended: Map<Cell, number>;
+  row: number;
+}
 
 /** 分隔行最多允许三列空白缩进；Tab 按四列制表位计数。 */
-function delimiter(text: string): Table["columns"] | null {
+function delimiter(text: string, bounds: number[]): Table["columns"] | null {
   let indent = 0;
   for (const character of text) {
     if (character === " ") indent++;
@@ -107,7 +139,6 @@ function delimiter(text: string): Table["columns"] | null {
     else break;
   }
   if (indent >= 4) return null;
-  const bounds = cellBounds(text);
   if (!bounds.length) return null;
   const columns: Table["columns"] = [];
   for (let index = 1; index < bounds.length; index++) {
@@ -128,13 +159,12 @@ function delimiter(text: string): Table["columns"] | null {
 function captionAt(text: string, offset: number, autolabel: boolean): Caption | null {
   const start = text.length - text.trimStart().length;
   if (text[start] !== "[") return null;
-  const ticks = backtickRuns(text);
+  const skipCode = text.includes("`") ? codeSpanEnd(text) : undefined;
   let depth = 1;
   let end = start + 1;
   for (; end < text.length; end++) {
     if (text[end] === "\\") { end++; continue; }
-    const run = ticks.get(end);
-    if (run) { end = (run.close ?? run.end) - 1; continue; }
+    if (skipCode && text[end] === "`") { end = skipCode(end) - 1; continue; }
     if (text[end] === "[") depth++;
     if (text[end] === "]" && --depth === 0) break;
   }
@@ -162,7 +192,7 @@ export class TableScanner {
   readonly options: Required<Options>;
   private columns: Table["columns"] | null = null;
   private groups: RowGroup[] = [];
-  private continuation: PhysicalRow[] | null = null;
+  private continuation: LogicalRow | null = null;
   private caption: Caption | null = null;
   private gap = false;
   private firstOffset: number | null = null;
@@ -181,15 +211,18 @@ export class TableScanner {
   /** 接收不含换行符的源行，offset 使用原始文档的 UTF-16 偏移。 */
   push(text: string, offset: number): boolean {
     if (this.closed) return false;
-    if (!text.trim()) {
+    const content = text.trimStart();
+    if (!content) {
       const body = this.groups.at(-1);
       if (!this.options.multibody || this.gap || this.continuation || body?.kind !== "body")
         return false;
       this.gap = true;
       return true;
     }
+    let bounds: number[] | undefined;
     if (!this.committed) {
-      const columns = delimiter(text);
+      bounds = cellBounds(text);
+      const columns = delimiter(text, bounds);
       if (columns !== null) {
         if (!this.groups.length && !this.options.headerless) return false;
         // 分隔行结束表头；未闭合的表头续行在快照中逐行回退。
@@ -199,7 +232,7 @@ export class TableScanner {
         return true;
       }
     }
-    if (!this.continuation) {
+    if (!this.continuation && content[0] === "[") {
       const caption = captionAt(text, offset, this.options.autolabel);
       if (caption) {
         if (this.caption || this.gap || (!this.committed && this.groups.length > 0)) return false;
@@ -211,22 +244,27 @@ export class TableScanner {
         return true;
       }
     }
-    if (cellBounds(text).length < 2) return false;
-    const line = { text, offset, continued: this.options.multiline && text.endsWith("\\") };
-    if (this.continuation) this.continuation.push(line);
-    else {
+    bounds ??= cellBounds(text);
+    if (bounds.length < 2) return false;
+    const continued = this.options.multiline && text.endsWith("\\");
+    const line = {
+      text, offset, continued,
+      bounds: continued ? cellBounds(text.slice(0, -1)) : bounds,
+    };
+    if (this.continuation) {
+      (this.continuation.following ??= []).push(line);
+      if (!continued) this.continuation = null;
+    } else {
       const kind = this.committed ? "body" : "head";
       let group = this.groups.at(-1);
       if (!group || group.kind !== kind || this.gap) {
         group = { kind, rows: [] };
         this.groups.push(group);
       }
-      const row = [line];
-      group.rows.push(row);
-      this.continuation = row;
+      group.rows.push(line);
+      if (continued) this.continuation = line;
     }
     this.gap = false;
-    if (!line.continued) this.continuation = null;
     this.recordExtent(offset, text.length);
     return true;
   }
@@ -241,10 +279,17 @@ export class TableScanner {
     if (!this.accepted) return null;
     const columns = this.columns!.map((column) => ({ ...column }));
     const sections = this.groups.map((group): Section => {
-      const rows = group.rows.flatMap((lines) => lines.at(-1)!.continued
-        ? lines.map((line) => materializeRow([line], false, columns))
-        : [materializeRow(lines, lines.length > 1, columns)]);
-      if (this.options.rowspan) mergeRows(rows);
+      const rows: Row[] = [];
+      const spans: RowSpans | undefined = this.options.rowspan
+        ? { previous: [], extended: new Map(), row: 0 } : undefined;
+      for (const first of group.rows) {
+        const following = first.following;
+        if ((following?.at(-1) ?? first).continued) {
+          rows.push(materializeRow(first, undefined, columns, spans));
+          if (following)
+            for (const line of following) rows.push(materializeRow(line, undefined, columns, spans));
+        } else rows.push(materializeRow(first, following, columns, spans));
+      }
       return {
         kind: group.kind,
         rows,
@@ -265,81 +310,99 @@ export class TableScanner {
   }
 }
 
-/** 将完整逻辑行映射为单元格；首行决定列数，后续物理行只补充内容。 */
-function materializeRow(lines: PhysicalRow[], block: boolean, columns: Table["columns"]): Row {
-  const pieces = lines.map((line) => {
-    const text = line.continued ? line.text.slice(0, -1) : line.text;
-    const bounds = cellBounds(text);
-    return Array.from({ length: Math.max(0, bounds.length - 1) }, (_, index) => ({
-      raw: text.slice(bounds[index]! + 1, bounds[index + 1]),
-      offset: line.offset + bounds[index]! + 1,
-    }));
-  });
+/** 首行决定列数和列跨度；同一分区的跨度状态在建模时接收当前行的覆盖关系。 */
+function materializeRow(
+  first: PhysicalRow, following: PhysicalRow[] | undefined, columns: Table["columns"],
+  spans?: RowSpans,
+): Row {
+  const last = following?.at(-1) ?? first;
+  const block = following !== undefined;
+  const width = Math.max(0, first.bounds.length - 1);
   const cells: Cell[] = [];
-  for (let column = 0; column < pieces[0]!.length; column++) {
-    const initial = pieces[0]![column]!;
-    if (!initial.raw.length) {
-      const previous = cells.at(-1);
-      if (previous && previous.column + previous.colspan === column) previous.colspan++;
+  const previous = spans?.previous;
+  const row = spans ? spans.row++ : 0;
+  for (let column = 0; column < width;) {
+    const begin = first.bounds[column]! + 1;
+    const raw = first.text.slice(begin, first.bounds[column + 1]);
+    if (!raw.length) {
+      // 首部空列没有锚点；清除上一行的对应覆盖，避免跨过空洞继续合并。
+      if (previous) previous[column] = undefined;
+      column++;
       continue;
     }
-    const segments: Range[] = [];
-    const values: string[] = [];
-    for (const line of pieces) {
-      const piece = line[column];
-      if (!piece) continue;
-      const value = block ? piece.raw.trimEnd() : piece.raw.trim();
-      const begin = block ? 0 : piece.raw.length - piece.raw.trimStart().length;
-      segments.push({ start: piece.offset + begin, end: piece.offset + begin + value.length });
-      values.push(value);
+    let next = column + 1;
+    while (next < width && first.bounds[next]! + 1 === first.bounds[next + 1]) next++;
+    let segments: Range[] | undefined;
+    let value: string;
+    if (following) {
+      segments = [];
+      const values: string[] = [];
+      for (let part = 0; part <= following.length; part++) {
+        const line = part === 0 ? first : following[part - 1]!;
+        const end = line.bounds[column + 1];
+        if (end === undefined) continue;
+        const begin = line.bounds[column]! + 1;
+        const value = line.text.slice(begin, end).trimEnd();
+        const start = line.offset + begin;
+        segments.push({ start, end: start + value.length });
+        values.push(value);
+      }
+      value = values.join("\n");
+    } else {
+      value = raw.trim();
     }
-    cells.push({
-      column,
-      colspan: 1,
-      rowspan: 1,
-      align: columns[column]?.align ?? null,
-      wrap: columns[column]?.wrap ?? false,
-      value: values.join("\n"),
-      block,
-      segments,
-      range: { start: segments[0]!.start, end: segments.at(-1)!.end },
-    });
+    let origin = previous && (following ? value.trim() : value) === "^^" ? previous[column] : undefined;
+    if (origin) {
+      const extended = spans!.extended;
+      if (extended.get(origin) !== row) {
+        origin.rowspan++;
+        extended.set(origin, row);
+      }
+    } else {
+      if (!segments) {
+        const start = first.offset + begin + raw.length - raw.trimStart().length;
+        segments = [{ start, end: start + value.length }];
+      }
+      origin = {
+        column,
+        colspan: next - column,
+        rowspan: 1,
+        align: columns[column]?.align ?? null,
+        wrap: columns[column]?.wrap ?? false,
+        value,
+        block,
+        segments,
+        range: {
+          start: first.offset + begin,
+          // 末行缺少此列时，沿用物理行末尾边界；segments 只记录实际存在的内容。
+          end: last.offset + (last.bounds[column + 1] ?? last.text.length),
+        },
+      };
+      cells.push(origin);
+    }
+    if (previous)
+      for (let slot = column; slot < next; slot++) previous[slot] = origin;
+    column = next;
   }
+  if (previous) previous.length = width;
   return {
     cells,
-    range: { start: lines[0]!.offset, end: lines.at(-1)!.offset + lines.at(-1)!.text.length },
+    range: { start: first.offset, end: last.offset + last.text.length },
   };
-}
-
-/** 合并只发生在当前分区；解析保留宽松网格，完整覆盖由 writer 校验。 */
-function mergeRows(rows: Row[]): void {
-  let previous = new Map<number, Cell>();
-  for (const row of rows) {
-    const current = new Map<number, Cell>();
-    const extended = new Set<Cell>();
-    row.cells = row.cells.filter((cell) => {
-      const above = previous.get(cell.column);
-      const inherited = cell.value.trim() === "^^" && above !== undefined;
-      const origin = inherited ? above : cell;
-      for (let column = cell.column; column < cell.column + cell.colspan; column++)
-        current.set(column, origin);
-      if (inherited && !extended.has(above)) {
-        above.rowspan++;
-        extended.add(above);
-      }
-      return !inherited;
-    });
-    previous = current;
-  }
 }
 
 /** 从字符串开头读取一个表格，首个被拒绝的物理行及其后内容归调用方。 */
 export function parseTable(source: string, options: Options = {}): Table | null {
   const scanner = new TableScanner(options);
-  const lines = /([^\r\n]*)(\r\n|\r|\n|$)/g;
-  for (const match of source.matchAll(lines)) {
-    if (!match[0].length || !scanner.push(match[1]!, match.index!)) break;
+  const breaks = /\r\n|\r|\n/g;
+  let offset = 0;
+  while (offset < source.length) {
+    const next = breaks.exec(source);
+    const end = next?.index ?? source.length;
+    if (!scanner.push(source.slice(offset, end), offset)) break;
     if (scanner.finished) break;
+    if (!next) break;
+    offset = breaks.lastIndex;
   }
   return scanner.finish();
 }

@@ -19,6 +19,8 @@ interface FailedHeaders {
 interface LexingFrame {
   failedHeaders: WeakMap<Token[], FailedHeaders>;
   startHint?: { length: number; from: number; failed: FailedHeaders };
+  /** 同一 blockTokens 帧内已确认没有后续表格的后缀长度上界。 */
+  noStartFromLength?: number;
 }
 
 /** 保留宿主块级语法的起始边界；四空格表头仍由核心分隔行规则判断。 */
@@ -129,7 +131,11 @@ export function markedMultimdTable(options: Options = {}): MarkedExtension {
         level: "block",
         childTokens: ["cellTokens", "captionTokens"],
         start(source) {
-          const hint = lexingFrame(this.lexer).startHint;
+          const frame = lexingFrame(this.lexer);
+          // 普通段落可能连一行候选表头都没有，仍须复用整段查找的否定结果。
+          if (frame.noStartFromLength !== undefined && source.length <= frame.noStartFromLength)
+            return;
+          const hint = frame.startHint;
           const active = hint?.length === source.length ? hint : undefined;
           if (active?.failed.nextStartLength !== undefined)
             return active.failed.nextStartLength === null
@@ -141,6 +147,8 @@ export function markedMultimdTable(options: Options = {}): MarkedExtension {
             this.lexer,
             active?.from,
           );
+          if (start === undefined)
+            frame.noStartFromLength = Math.max(frame.noStartFromLength ?? 0, source.length);
           // 同一失败段后的寻找结果也只扫描一次，list 中的逐行 text 可直接复用。
           if (active) active.failed.nextStartLength = start === undefined ? null : source.length - start;
           return start;

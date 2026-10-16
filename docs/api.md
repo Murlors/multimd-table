@@ -67,8 +67,10 @@ Exported types: `Options`, `Table`, `Section`, `Row`, `Cell`, `Caption`, `Range`
 `Alignment`, and `ExpandedCell`. TypeScript declarations document their fields.
 
 All ranges are UTF-16 half-open intervals (`start` inclusive, `end` exclusive),
-matching JavaScript string offsets. A multiline cell's `segments` locate its
-separate source pieces. Cell `value` is raw Markdown rather than HTML.
+matching JavaScript string offsets. A cell's `range` spans its raw boundaries on
+the first and last physical lines, including cell-padding whitespace. Its
+`segments` locate the separate source pieces that form `value`. Cell `value` is
+raw Markdown rather than HTML.
 
 ## Writer: `multimd-table/writer`
 

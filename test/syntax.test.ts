@@ -14,6 +14,7 @@ test("pipe scanning distinguishes escape parity, matched tick runs and literal t
     ["\\`name|value`", ["\\`name", "value`"]],
     ["\\``part|text`|tail", ["\\``part|text`", "tail"]],
     ["\\```part|text``|tail", ["\\```part|text``", "tail"]],
+    ["`unclosed|``a ```inner``|```b|c```|tail", ["`unclosed", "``a ```inner``", "```b|c```", "tail"]],
   ];
   for (const [source, expected] of values) {
     const bounds = cellBounds(source);
@@ -45,7 +46,7 @@ test("all model ranges remain independent and point into multiline Unicode sourc
 test("captions balance nested links and reject partial or empty bracket lines", () => {
   const table = parseTable("[[catalog](/shop) and \\[note\\]]\nItem|Count\n-|-\nCup|2")!;
   expect(table.caption!.value).toBe("[catalog](/shop) and \\[note\\]");
-  for (const value of ["Use `[` here", "Use `]` here", "Use ``[`]`` here", "Use \\``[` here"])
+  for (const value of ["Use `[` here", "Use `]` here", "Use ``[`]`` here", "Use \\``[` here", "`unclosed ``a ```inner`` ```]```"])
     expect(parseTable(`[${value}]\nItem|Count\n-|-\nCup|2`)!.caption!.value).toBe(value);
   for (const prefix of ["[]", "[unfinished", "[label] extra"])
     expect(parseTable(`${prefix}\nItem|Count\n-|-\nCup|2`)).toBeNull();
@@ -98,4 +99,13 @@ test("continued markers extend one source cell once per logical row", () => {
   expect(body.rows[1]!.cells).toEqual([]);
   expect(body.rows[2]!.cells).toEqual([]);
   expect(expandSection(body).flat().every((cell) => cell?.value === "shared")).toBe(true);
+});
+
+test("row spans do not cross uncovered columns in shorter rows", () => {
+  const table = parseTable("A|B|C\n-|-|-\na|b|c\n||fresh\n^^|^^|^^", { rowspan: true })!;
+  const body = table.sections[1]!;
+  expect(body.rows[0]!.cells.map(cell => cell.rowspan)).toEqual([1, 1, 1]);
+  expect(body.rows[1]!.cells[0]).toMatchObject({ column: 1, value: "fresh", rowspan: 2 });
+  expect(body.rows[2]!.cells.map(cell => [cell.column, cell.value])).toEqual([[0, "^^"], [2, "^^"]]);
+  expect(expandSection(body)[2]!.map(cell => cell?.value)).toEqual(["^^", "fresh", "^^"]);
 });
