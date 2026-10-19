@@ -4,8 +4,13 @@
 
 **Parse, render, and write rich Markdown tables.**
 
-A TypeScript toolkit for MultiMarkdown tables with merged cells, captions,
-multiple header and body sections, and multiline Markdown.
+A JavaScript/TypeScript toolkit for MultiMarkdown tables with merged cells,
+captions, multiple header and body sections, and multiline Markdown.
+
+The current development build uses one Rust parser/writer compiled to WebAssembly.
+The former TypeScript parser/writer has been removed; its verified behavior is
+preserved in frozen regression contracts. This migration has not been published
+to npm yet.
 
 - **Parse:** get structured data, source ranges, and merged-cell origins from a
   standalone core.
@@ -55,7 +60,8 @@ bun add multimd-table
 ```
 
 ESM only, with TypeScript declarations. Install the host and optional peers for
-the adapter you use; the core has no runtime imports.
+the adapter you use. The core and writer have no external JavaScript runtime
+peers; the package embeds its compiled WASM, so consumers do not need Rust.
 
 | Entry | Host / peers |
 | --- | --- |
@@ -64,6 +70,14 @@ the adapter you use; the core has no runtime imports.
 | `multimd-table/remark` | `unified` 11, `mdast-util-from-markdown` 2 |
 | `multimd-table/marked` | `marked` 18 (Node.js 20+ when used in Node) |
 | `multimd-table/markdown-it` | `markdown-it` 15 |
+
+APIs remain synchronous after the ESM import. Each module graph compiles and
+instantiates the embedded core on first import; that initialization has a cost
+separate from parsing throughput. Browsers and Workers need WebAssembly support.
+Apps with CSP must allow WASM compilation, for example with `wasm-unsafe-eval` in
+`script-src` ([WebAssembly compilation and CSP](https://developer.mozilla.org/en-US/docs/WebAssembly/Reference/JavaScript_interface/Module/Module)).
+When bundling remark in a Web Worker, select the `worker` export condition so its
+entity decoder uses the document-free implementation.
 
 ## react-markdown
 
@@ -281,13 +295,29 @@ The core and all adapters accept the same options:
 | --- | --- |
 | `parseTable(source, options?)` | Leading `Table`, or `null` |
 | `expandSection(section)` | Rectangular grid with `origin`, `inherited` and `null` holes |
-| `TableScanner` | Incremental parsing with `push(line, offset)` and `finish()` |
+| `TableScanner` | Incremental parsing with `push(line, offset)`, `finish()` and `dispose()` |
 | `cellBounds(line)` | UTF-16 pipe boundaries |
 | `defaults` | Read-only option defaults |
 
 Adapters use default imports; core functions and types use named imports. See
 the [API reference](https://github.com/Murlors/multimd-table/blob/main/docs/api.md)
 for scanner state, source ranges, models and host-specific node/token types.
+
+Adapters release their own scanners on completion and failure. Direct scanner
+users must release the Rust state after their last snapshot:
+
+```ts
+import { TableScanner } from "multimd-table";
+
+const scanner = new TableScanner();
+try {
+  scanner.push("A|B", 0);
+  scanner.push("-|-", 4);
+  const table = scanner.finish();
+} finally {
+  scanner.dispose();
+}
+```
 
 ## Rendering and compatibility
 
@@ -303,8 +333,14 @@ for that workload.
 
 ## Development
 
+Developing the core requires Rust and the `wasm32-unknown-unknown` target
+(`rustup target add wasm32-unknown-unknown`). Run `bun run prepare:wasm` before a
+direct `bun test`; the package scripts prepare it automatically.
+
 Run `bun run check` for correctness and `bun run check:package` for isolated package
-consumers. `bun run bench --out .performance/baseline` measures the core, writer and
+consumers, type declarations and browser/Worker bundles. The latter writes a
+browser acceptance page to `.performance/package-browser/index.html`; serve the
+repository over local HTTP to run it. `bun run bench --out .performance/baseline` measures the core, writer and
 all three adapters on Node and Bun. See the [baseline guide](docs/baselines.md) for
 fixed workloads, report comparison and CI artifacts.
 
