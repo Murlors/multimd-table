@@ -64,6 +64,8 @@ bun run bench --quick --out .performance/smoke
 
 `bench` builds the production modules and benchmark runner before measuring. It
 does not install dependencies, fetch an old release or modify library sources.
+Every build recreates `dist/`, so removed entry points and old source maps cannot
+survive in the generated output.
 Reports use exclusive creation: existing results are never overwritten.
 
 The fixed corpus lives in `tooling/performance/corpus.ts`. There are 17 workloads:
@@ -102,15 +104,13 @@ CI runs the quick profile on Node and Bun and uploads both JSON reports as the
 `performance-<commit>` artifact. Script errors and failed output checks fail the job;
 timing fluctuations do not. Download artifacts from GitHub Actions for inspection,
 and use full local runs for performance decisions. Machine-specific reports and the
-built runner stay under ignored `.performance/`, outside the npm package. Existing
-local research in ignored `bench/` is independent of this maintained suite.
+built runner stay under ignored `.performance/`, outside the npm package.
 
 The [Rust shared core](../crates/core/README.md) supplies the default package and
 the native Python/Go probes. `core:check` validates frozen regression contracts
 and the native bindings; `core:profile` isolates transport, Rust execution and
 object construction. `bench` and `bench:compare` maintain performance comparisons
-between saved reports. Historical TS/Rust timing records in the core document
-predate the migration; the old dual-backend runner has been retired.
+between saved reports.
 
 ## Packed-package and consumer acceptance
 
