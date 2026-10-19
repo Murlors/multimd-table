@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { Marked } from "marked";
 import { parseFragment, serialize } from "parse5";
 import { parseTable, type Table } from "../src/core.js";
-import { stringifyTable, type WriteTable } from "../src/writer.js";
+import { stringifyTable, type WriteTable, type WriteCell, type WriteSection } from "../src/writer.js";
 
 const options = { rowspan: true, multiline: true, headerless: true, multibody: true };
 const markdown = new Marked();
@@ -135,31 +135,46 @@ test("caption sides and representable normalized IDs survive", () => {
   ]) expect(() => stringifyTable({ ...basic(), caption: caption as any })).toThrow(RangeError);
 });
 
-test("seeded rectangular tilings with combined spans retain structure", () => {
+test("seeded multi-section tilings retain spans and Markdown semantics (seed 0x51a7)", () => {
   let state = 0x51a7;
   const random = (limit: number) => {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
     return state % limit;
   };
   for (let sample = 0; sample < 200; sample++) {
-    const width = random(8) + 1, height = random(8) + 1;
-    const occupied = Array.from({ length: height }, () => Array<boolean>(width).fill(false));
-    const rows = Array.from({ length: height }, () => ({ cells: [] as { column: number; colspan: number; rowspan: number; value: string }[] }));
-    for (let r = 0; r < height; r++) {
-      for (let c = 0; c < width; c++) {
-        if (occupied[r]![c]) continue;
-        let available = 1;
-        while (c + available < width && !occupied[r]![c + available]) available++;
-        const colspan = random(available) + 1;
-        let down = 1;
-        while (r + down < height && occupied[r + down]!.slice(c, c + colspan).every((slot) => !slot)) down++;
-        const rowspan = random(down) + 1;
-        for (let dr = 0; dr < rowspan; dr++)
-          for (let dc = 0; dc < colspan; dc++) occupied[r + dr]![c + dc] = true;
-        rows[r]!.cells.push({ column: c, colspan, rowspan, value: random(4) ? `cell ${r},${c}` : "" });
+    const width = random(8) + 1;
+    const values = ["", "plain", "😀", "**bold**", "left|right", "`a|b`", "^^", "[link](/target)", "first\nsecond", "- one\n- two"];
+    const sections: WriteSection[] = [];
+    for (const kind of ["head", "body", "body"] as const) {
+      const height = random(8) + 1;
+      const occupied = Array.from({ length: height }, () => Array<boolean>(width).fill(false));
+      const rows = Array.from({ length: height }, () => ({ cells: [] as WriteCell[] }));
+      for (let r = 0; r < height; r++) {
+        for (let c = 0; c < width; c++) {
+          if (occupied[r]![c]) continue;
+          let available = 1;
+          while (c + available < width && !occupied[r]![c + available]) available++;
+          const colspan = random(available) + 1;
+          let down = 1;
+          while (r + down < height && occupied[r + down]!.slice(c, c + colspan).every((slot) => !slot)) down++;
+          const rowspan = random(down) + 1;
+          for (let dr = 0; dr < rowspan; dr++)
+            for (let dc = 0; dc < colspan; dc++) occupied[r + dr]![c + dc] = true;
+          const value = values[random(values.length)]!;
+          rows[r]!.cells.push({ column: c, colspan, rowspan, value, block: value.includes("\n") });
+        }
       }
+      sections.push({ kind, rows });
     }
-    roundTrip({ columns: Array.from({ length: width }, () => ({ align: null })), sections: [{ kind: "body", rows }] });
+    try {
+      roundTrip({
+        columns: Array.from({ length: width }, () => ({ align: ([null, "left", "center", "right"] as const)[random(4)]!, wrap: !!random(2) })),
+        sections,
+        caption: { value: "**Summary**", id: "summary", side: sample % 2 ? "top" : "bottom" },
+      });
+    } catch (error) {
+      throw new Error(`seed=0x51a7 sample=${sample} width=${width}`, { cause: error });
+    }
   }
 });
 
