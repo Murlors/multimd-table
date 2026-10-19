@@ -1,0 +1,174 @@
+{
+  "provenance": "Frozen from the former TypeScript parser/writer before removal; intentional contract changes require review, not automatic regeneration.",
+  "groups": [
+    {
+      "first": "unfinished header and body continuations retain inline rows",
+      "last": "options-24-0",
+      "count": 100,
+      "sha256": "f1ca23318186892616ab1613a4c01d3e1c9322f2cf4e5133c7c9fa7ba1f5e3e3"
+    },
+    {
+      "first": "options-24-1",
+      "last": "seed-c0ffee-76",
+      "count": 100,
+      "sha256": "8f741b10f8750f25aaa4b8257d8ae4494822bcc5b86a6edfc8dbd1968a2c0b6d"
+    },
+    {
+      "first": "seed-c0ffee-77",
+      "last": "seed-c0ffee-176",
+      "count": 100,
+      "sha256": "3c0b9a751ae513f77e72fd3b39551c5b0932f1e43ce0672018841abe34df65b0"
+    },
+    {
+      "first": "seed-c0ffee-177",
+      "last": "seed-c0ffee-276",
+      "count": 100,
+      "sha256": "bedc11bc6741da83a0f6c669ba95536b795265fa45ad8d300eec90cab48d35f3"
+    },
+    {
+      "first": "seed-c0ffee-277",
+      "last": "seed-c0ffee-376",
+      "count": 100,
+      "sha256": "3ad7edd49cc98b00e5b1f5e33997dfadda04664158a9898e5f1689bcecb9a553"
+    },
+    {
+      "first": "seed-c0ffee-377",
+      "last": "seed-c0ffee-476",
+      "count": 100,
+      "sha256": "381d61c0167e74ab342ae6fd15f6529d0b4c5931c75f41c2ce22abd23f1cac53"
+    },
+    {
+      "first": "seed-c0ffee-477",
+      "last": "seed-c0ffee-576",
+      "count": 100,
+      "sha256": "dccf084ff9850e34713058d90706ac7047a8e5d80458bce3991e2cdb7c901c7b"
+    },
+    {
+      "first": "seed-c0ffee-577",
+      "last": "seed-c0ffee-676",
+      "count": 100,
+      "sha256": "6c08011bb5602f067c50b94af9d38aeee57f95817d462d18e69faabaf2f87fad"
+    },
+    {
+      "first": "seed-c0ffee-677",
+      "last": "seed-c0ffee-776",
+      "count": 100,
+      "sha256": "b74243726eafd2d302d6d25c27070b758d95b69eb5a86243fd454c570d3d287b"
+    },
+    {
+      "first": "seed-c0ffee-777",
+      "last": "seed-c0ffee-876",
+      "count": 100,
+      "sha256": "2561bbd925b4306eecaf1ea882e658b101db6b7c0eab09bb9728e19633272e28"
+    },
+    {
+      "first": "seed-c0ffee-877",
+      "last": "seed-c0ffee-976",
+      "count": 100,
+      "sha256": "acdd1d49871df58988868584dc19bfc98c41ddf1dd7672ee4e6199188628d074"
+    },
+    {
+      "first": "seed-c0ffee-977",
+      "last": "seed-c0ffee-1076",
+      "count": 100,
+      "sha256": "7d061e82f2766a162755f6df95e45e6b304809118c39bed3a6095e95a2c2bdb2"
+    },
+    {
+      "first": "seed-c0ffee-1077",
+      "last": "seed-c0ffee-1176",
+      "count": 100,
+      "sha256": "a561095b4b8723268bee951ca30c58664ce875dfd77304403f133dfa70734843"
+    },
+    {
+      "first": "seed-c0ffee-1177",
+      "last": "seed-c0ffee-1276",
+      "count": 100,
+      "sha256": "930c0077c354906101cc46a59ed774d775eb24766bcae2fd4754c0e5b420327c"
+    },
+    {
+      "first": "seed-c0ffee-1277",
+      "last": "seed-c0ffee-1376",
+      "count": 100,
+      "sha256": "22be703e49b6462bfeaebbd114e86b692e1319fad5943ec212825ed9bf03f1d1"
+    },
+    {
+      "first": "seed-c0ffee-1377",
+      "last": "seed-c0ffee-1476",
+      "count": 100,
+      "sha256": "354ebc1b72f968d3e5264ead48de93a038aa2abce6a2e34d9e32aa32a380aa9e"
+    },
+    {
+      "first": "seed-c0ffee-1477",
+      "last": "seed-c0ffee-1576",
+      "count": 100,
+      "sha256": "742ed4069953657650c56b780a229adcaf899b4ddf0383711e3c2e5e0f927e91"
+    },
+    {
+      "first": "seed-c0ffee-1577",
+      "last": "seed-c0ffee-1676",
+      "count": 100,
+      "sha256": "df83596fa365b318a2c8a6e9bf2756ad225ef04e99a44bf8104116e30f87321a"
+    },
+    {
+      "first": "seed-c0ffee-1677",
+      "last": "seed-c0ffee-1776",
+      "count": 100,
+      "sha256": "a316e2b7360231fb34717d5695b57f375503c13feadeac3e7a8fe31dc5baf2d5"
+    },
+    {
+      "first": "seed-c0ffee-1777",
+      "last": "seed-c0ffee-1876",
+      "count": 100,
+      "sha256": "f866c051ea0c0d5894fcfc364b81dd2be4d5badcdd5f057162ab1dd7baf6fa0b"
+    },
+    {
+      "first": "seed-c0ffee-1877",
+      "last": "seed-c0ffee-1976",
+      "count": 100,
+      "sha256": "31a2bdec7719ad96cf728566ec8749a1ed1cb77e91a077f9344e52d7a1c984e1"
+    },
+    {
+      "first": "seed-c0ffee-1977",
+      "last": "writer-utf16-6",
+      "count": 30,
+      "sha256": "f1862bf69ee037d9588bb65cd46bc9ca3d726e9102bb1546ef7f0762b43719e3"
+    }
+  ],
+  "scanners": [
+    [
+      "b8072fd18baa46f473aa4b2f1f19d022765f1b3b50d0c105868d76767fd1fe14",
+      "b8072fd18baa46f473aa4b2f1f19d022765f1b3b50d0c105868d76767fd1fe14",
+      "824164492ec05a708e89e8446e4d3c77a1d9b0ad405ae2cffae7f9d6776d0734",
+      "fdc825a40e19bd91bbbee58c9755f5613b4dd4ad2997740bd22ea7ae1c9d2c91",
+      "3650342559dc3c082fdbd33d68915bdfd97f93702387fc4d237c9daf7d843e47"
+    ],
+    [
+      "b8072fd18baa46f473aa4b2f1f19d022765f1b3b50d0c105868d76767fd1fe14",
+      "b8072fd18baa46f473aa4b2f1f19d022765f1b3b50d0c105868d76767fd1fe14",
+      "6ee63049cf01467591817f885450df51d4e97b1a92184ebc2e679385b249fc8e",
+      "1e46ebbf3069fabe71d9d9cc6c0dec52f52042e2e5a48c88884365902d131bab",
+      "e1d5b510a710c4915fc1c9965c0d42d0739e208d73983c1985c74a6044852734"
+    ],
+    [
+      "b8072fd18baa46f473aa4b2f1f19d022765f1b3b50d0c105868d76767fd1fe14",
+      "b8072fd18baa46f473aa4b2f1f19d022765f1b3b50d0c105868d76767fd1fe14",
+      "964d629869a9aea1d34321ede9f2ffff6c9baef218502e80c6d6b7c36f1c9f01",
+      "d7067d1abb9aa2df71a0536bdacc9a9f713dc97ba7ac5de89bfb3adbdc109485",
+      "3ef60cde01d989a42c4771e2d885df3fae121d892d987d921c40dca17a5d8a10"
+    ],
+    [
+      "b8072fd18baa46f473aa4b2f1f19d022765f1b3b50d0c105868d76767fd1fe14",
+      "b8072fd18baa46f473aa4b2f1f19d022765f1b3b50d0c105868d76767fd1fe14",
+      "60523fe1dc58b76f4b85d6b8817170cf024fe8d90c5daae015f7361b61955f36",
+      "6b0cbda28e17b2acaefcb209d7c18f8994eaf0c12e2bc474cdd2756531d97410",
+      "a3f95ec5c79075fc04137f07e7cb2a6cc1ea657e00b66eb6585fab7053109d71"
+    ]
+  ],
+  "options": [
+    "2c4f4734b0983ff27dd0076bdcca543e4f59e7e0ca066cfcee3468b1746ddace",
+    "b080489064d139241c2254b225c2fafe39c49106ce71f7c2b09ac2253622ba6b",
+    "2c4f4734b0983ff27dd0076bdcca543e4f59e7e0ca066cfcee3468b1746ddace",
+    "2acd30c54e5c7562f1656f263109bee02ce13156e01fb7091dd72d7b8196d76c"
+  ],
+  "writerBoundaries": "b3209f20eb568946a30638348491617a9f9fd53f9f76c67c2402af1f0705fdb5"
+}

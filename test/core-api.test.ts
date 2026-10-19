@@ -1,4 +1,5 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
+import { runtime } from "../src/internal/backend.js";
 import { expandSection, parseTable, TableScanner } from "../src/core.js";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
@@ -6,6 +7,7 @@ import remarkGfm from "remark-gfm";
 import remarkRehype from "remark-rehype";
 import rehypeStringify from "rehype-stringify";
 import remarkMultimdTable from "../src/remark.js";
+afterEach(() => runtime.disposeScanners());
 import { parseFragment, type DefaultTreeAdapterMap } from "parse5";
 
 test("cell ranges retain raw padding while segments locate inline content", () => {

@@ -20,6 +20,7 @@ jobs:
         with:
           node-version: 24
       - run: bun install --frozen-lockfile
+      - run: rustup target add wasm32-unknown-unknown
       - run: bun run check
       - run: bun run check:package
   performance:
@@ -33,6 +34,7 @@ jobs:
         with:
           node-version: 24
       - run: bun install --frozen-lockfile
+      - run: rustup target add wasm32-unknown-unknown
       - run: bun run bench --quick --out .performance/ci
       - uses: actions/upload-artifact@v4
         with:

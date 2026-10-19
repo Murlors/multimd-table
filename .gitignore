@@ -5,4 +5,7 @@ coverage/
 # 本地性能研究，不作为开源项目或 npm 包的一部分。
 bench/
 .performance/
+crates/core/target/
+crates/core/bindings/__pycache__/
+src/internal/wasm-data.js
 .DS_Store

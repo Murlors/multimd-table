@@ -1,5 +1,7 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
+import { runtime } from "../src/internal/backend.js";
 import { parseTable, TableScanner } from "../src/core.js";
+afterEach(() => runtime.disposeScanners());
 
 test("mixed line endings retain UTF-16 ranges and stop at rejected input", () => {
   const source = "A|B\r\n-|-\r😀|\ud800\nnot a table\r\nx|y";
