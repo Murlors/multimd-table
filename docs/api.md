@@ -4,6 +4,9 @@
 imports from the core and default imports for adapters. Install only the host
 and optional peers for the adapter you use.
 
+The development build uses an embedded Rust/WASM core. Runtime support and
+first-import initialization are described in the [README](../README.md#install).
+
 ## Core: `multimd-table`
 
 ### `parseTable(source, options?)`
@@ -27,8 +30,18 @@ Construct `new TableScanner(options?)`. Call `push(line, offset)` with a physica
 line without its line ending and its UTF-16 source offset. Rejection returns
 `false` without changing state.
 
+The offset and `offset + line.length` must be nonnegative safe integers. Large
+document offsets, gaps and repeated offsets are preserved; the binding maps them
+to compact table-local positions internally. Invalid offsets throw `RangeError`.
+
 `finish()` returns an independent snapshot or `null`. It does not close the
 scanner; repeated snapshots and further input are permitted.
+
+Call `dispose()` in `finally` after the last use. Disposal is idempotent, releases
+the native scanner and retained source lines, and leaves previous models intact.
+Further `push` or `finish` calls throw. The adapters handle this lifetime for
+their own scanners; direct users must not depend on garbage collection for timely
+release of WASM memory.
 
 | Flag | Meaning |
 | --- | --- |

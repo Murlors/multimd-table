@@ -2,9 +2,13 @@
 
 ## Correctness
 
-Run `bun run check` for type checking, tests in normal and development conditions,
-and a production build. Run `bun run check:package` to validate the packed package
+Run `bun run check` for type checking, Rust and transport tests, tests in normal
+and development conditions, and a production build. Run `bun run check:package` to validate the packed package
 in isolated consumers. These remain required CI checks.
+
+The default implementation is now Rust/WASM. Tests require the generated embedded
+module; `bun run test`, `bun run check` and `bun run build` prepare it using the
+locked Rust crate. Direct `bun test` requires `bun run prepare:wasm` first.
 
 The baseline combines existing hand-written syntax contracts and new generated checks:
 
@@ -24,6 +28,17 @@ The baseline combines existing hand-written syntax contracts and new generated c
   Unrepresentable content must still fail explicitly.
 - Performance fixtures are also checked for expected section row counts and source
   coordinates, so shortening the parsed input cannot silently look like a speedup.
+- `test/runtime.test.ts` checks lazy scanner allocation, deterministic and scoped
+  plugin cleanup, exception paths, mutable options, large document offsets and
+  independent snapshots. Test teardown releases scanners explicitly held by older
+  cases; lifecycle assertions run before that cleanup.
+- `test/contracts.ts` verifies 2,130 complete parser/writer cases and seven Unicode
+  writer boundaries against frozen results from the former TS implementation.
+  `test/fixtures/core-contracts.json` stores SHA-256 summaries in groups of at most
+  100 cases, plus incremental scanner contracts. Object keys are sorted before
+  hashing; arrays, strings and ranges remain significant. Failures identify the
+  affected group. Intentional contract changes require review rather than automatic
+  regeneration from current output. The old TS implementation is no longer retained.
 
 Failures in generated cases include the seed, sample and relevant input. Add a
 small, explicit regression case when fixing a discovered issue. Production data
@@ -71,7 +86,7 @@ uses one process, 100 ms warmup and three batches targeting 15 ms; it checks the
 measurement path, not release performance.
 
 Reports record runtime/host versions, OS/architecture/CPU, revision, dirty state,
-module hashes, corpus/runner fingerprint and measurement settings. Comparisons reject
+module hashes (including the embedded WASM and binding), corpus/runner fingerprint and measurement settings. Comparisons reject
 different environments, profiles, fixtures or workload sets. Code/module hashes may
 change, as expected when comparing implementations. A changed corpus or runner needs
 a new baseline. Runtime startup and cold-start performance, retained heap and peak
@@ -89,3 +104,46 @@ timing fluctuations do not. Download artifacts from GitHub Actions for inspectio
 and use full local runs for performance decisions. Machine-specific reports and the
 built runner stay under ignored `.performance/`, outside the npm package. Existing
 local research in ignored `bench/` is independent of this maintained suite.
+
+The [Rust shared core](../crates/core/README.md) supplies the default package and
+the native Python/Go probes. `core:check` validates frozen regression contracts
+and the native bindings; `core:profile` isolates transport, Rust execution and
+object construction. `bench` and `bench:compare` maintain performance comparisons
+between saved reports. Historical TS/Rust timing records in the core document
+predate the migration; the old dual-backend runner has been retired.
+
+## Packed-package and consumer acceptance
+
+`bun run check:package` packs the actual whitelist of published files, installs
+that tarball into isolated consumers and checks Node, Bun and TypeScript. Core
+and writer declarations are checked without DOM types or optional peers. The
+core probe warms a 5,000-row workload, then checks 100 further parses without
+additional WASM memory growth. First-import observations are recorded separately
+from throughput; they include module loading/compilation, not process startup.
+
+The validated tarball and metadata remain in `.performance/package-acceptance/`.
+Browser fixtures are generated from an isolated installation, not source aliases.
+Serve the repository over local HTTP and open
+`/.performance/package-browser/index.html` to check unbundled synchronous APIs,
+bundled host adapters, Unicode, large source offsets and a real module Worker.
+The fixture CSP permits only same-origin scripts and WASM compilation. Worker
+bundles select the `worker` condition for document-free entity decoding.
+
+A consumer's existing Bun tests can run against that exact tarball:
+
+```sh
+bun tooling/check-consumer.ts ../consumer tests/table-editor.test.ts
+```
+
+The runner verifies the archive hash, unpacks inside this repository's
+`.performance/`, and maps package imports to its real exports through a test
+preload. It verifies the resolved parser identity and checks for live scanners
+after each test. Consumer sources, dependencies and configuration are unchanged;
+tests execute in their original environment so relative resources keep working.
+
+Local migration acceptance used Noumi's `workspace-rich-multimd`,
+`chat-markdown-multimd` and `chat-markdown-worker` suites: 25 tests covered native
+editing, save/reopen, merged cells, references, HTML handling and Worker result
+coordination. This was package-based local testing, not an update or deployment
+of Noumi's installed dependency. Browser Worker module loading is checked by the
+separate packed-package page.
