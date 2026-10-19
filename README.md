@@ -301,6 +301,13 @@ Marked 18.1.1's native Setext-heading detection is slow on Bun 1.4.3 for long li
 with many continuation lines, even without tables. Use Node or another adapter
 for that workload.
 
+## Development
+
+Run `bun run check` for correctness and `bun run check:package` for isolated package
+consumers. `bun run bench --out .performance/baseline` measures the core, writer and
+all three adapters on Node and Bun. See the [baseline guide](docs/baselines.md) for
+fixed workloads, report comparison and CI artifacts.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

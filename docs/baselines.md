@@ -1,0 +1,91 @@
+# Correctness and performance baselines
+
+## Correctness
+
+Run `bun run check` for type checking, tests in normal and development conditions,
+and a production build. Run `bun run check:package` to validate the packed package
+in isolated consumers. These remain required CI checks.
+
+The baseline combines existing hand-written syntax contracts and new generated checks:
+
+- All three adapters render the shared syntax cases and all 32 option combinations
+  against explicit expected HTML. Host-specific behavior has separate tests.
+- `test/baseline.test.ts` compares pipe boundaries against an independent, slow
+  reference scanner for all 87,381 strings over `a`, `|`, backtick and backslash
+  through length 8, plus 3,000 seeded Unicode/whitespace/delimiter-run samples.
+- Another 1,000 seeded documents exercise malformed input, mixed line endings,
+  scanner rejection and snapshot independence. Cell segments must reconstruct
+  the original Markdown value, and all source ranges must remain valid UTF-16
+  intervals. Scanner/whole-string equivalence is supplementary, not an independent
+  grammar oracle.
+- Writer tests include 200 seeded grids with a header and two body sections,
+  row/column spans, alignment, captions, empty cells, inline Markdown and blocks.
+  Round trips compare structure and rendered Markdown semantics, not raw spelling.
+  Unrepresentable content must still fail explicitly.
+- Performance fixtures are also checked for expected section row counts and source
+  coordinates, so shortening the parsed input cannot silently look like a speedup.
+
+Failures in generated cases include the seed, sample and relevant input. Add a
+small, explicit regression case when fixing a discovered issue. Production data
+should be minimized and stripped of private content before becoming a fixture.
+
+## Performance
+
+From the repository root, with dependencies installed and Node and Bun available:
+
+```sh
+# Full measurement, both runtimes. Choose a fresh output prefix for each run.
+bun run bench --out .performance/baseline
+bun run bench --out .performance/candidate
+
+# Compare each runtime separately. Negative time change means faster.
+bun run bench:compare .performance/baseline-node.json .performance/candidate-node.json
+bun run bench:compare .performance/baseline-bun.json .performance/candidate-bun.json
+
+# One runtime, or a shorter smoke run for CI/tooling development.
+bun run bench --runtime node --out .performance/node-only
+bun run bench --quick --out .performance/smoke
+```
+
+`bench` builds the production modules and benchmark runner before measuring. It
+does not install dependencies, fetch an old release or modify library sources.
+Reports use exclusive creation: existing results are never overwritten.
+
+The fixed corpus lives in `tooling/performance/corpus.ts`. There are 17 workloads:
+nine core cases (small/medium/large plain tables, combined spans and body sections,
+multiline cells, escaped pipes/code/Unicode, a wide table, unmatched backtick runs,
+and a delimiter-free candidate); writer plus each adapter run on the same plain
+and rich cases. Adapter timings include the host's complete parse/render pipeline
+with a reused processor, not just this package's incremental cost. Core timings
+do not load host parsers. The core only reads a leading table; the invalid candidate
+exercises scanning without finding a delimiter, not whole-document table discovery.
+
+Each workload/trial uses a fresh process loading the same built modules. Preparation
+and validation happen outside timing. Explicit GC runs before warmup, then normal
+allocation and GC remain inside measurements. Full runs use three processes per
+workload/runtime, 1,000 ms warmup and seven calibrated batches targeting 40 ms each.
+Batch size is capped at 16,384 operations; expensive operations can exceed the target.
+The summary is the median of per-process batch medians, with operations/second and
+the range of process medians. Raw per-batch ms/op remain in JSON. The quick profile
+uses one process, 100 ms warmup and three batches targeting 15 ms; it checks the
+measurement path, not release performance.
+
+Reports record runtime/host versions, OS/architecture/CPU, revision, dirty state,
+module hashes, corpus/runner fingerprint and measurement settings. Comparisons reject
+different environments, profiles, fixtures or workload sets. Code/module hashes may
+change, as expected when comparing implementations. A changed corpus or runner needs
+a new baseline. Runtime startup and cold-start performance, retained heap and peak
+memory are not measured by this suite.
+
+Run on the same quiet machine and runtime versions, alternating baseline/candidate
+order across repeated runs when investigating a regression. Hardware labels do not
+capture load, power mode or thermal throttling; identical metadata alone cannot
+guarantee comparable results. Small differences need replication. No wall-clock
+threshold blocks CI yet.
+
+CI runs the quick profile on Node and Bun and uploads both JSON reports as the
+`performance-<commit>` artifact. Script errors and failed output checks fail the job;
+timing fluctuations do not. Download artifacts from GitHub Actions for inspection,
+and use full local runs for performance decisions. Machine-specific reports and the
+built runner stay under ignored `.performance/`, outside the npm package. Existing
+local research in ignored `bench/` is independent of this maintained suite.
