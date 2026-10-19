@@ -1,9 +1,9 @@
 # Rust shared core
 
-The development package uses one Rust parser/writer through WASM. Public npm
+The package uses one Rust parser/writer through WASM. Public npm
 entry points retain synchronous calls and TypeScript models. The former TS
-parser/writer and dual-backend benchmark tools have been removed. Publishing
-and application deployment are separate steps and have not been performed.
+parser/writer and dual-backend benchmark tools have been removed. Python and Go
+bindings remain integration probes rather than published language packages.
 
 Browser and Node/Bun call the same WASM build; Python and Go integration probes
 call the native build through its C ABI. `expandSection` remains a small
