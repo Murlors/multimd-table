@@ -4,7 +4,7 @@
 imports from the core and default imports for adapters. Install only the host
 and optional peers for the adapter you use.
 
-The development build uses an embedded Rust/WASM core. Runtime support and
+The package uses an embedded Rust/WASM core. Runtime support and
 first-import initialization are described in the [README](../README.md#install).
 
 ## Core: `multimd-table`

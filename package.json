@@ -1,6 +1,6 @@
 {
   "name": "multimd-table",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Parse, render and write MultiMarkdown tables with merged cells, structured data and Markdown ecosystem adapters",
   "keywords": [
     "markdown",

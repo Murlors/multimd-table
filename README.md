@@ -7,10 +7,8 @@
 A JavaScript/TypeScript toolkit for MultiMarkdown tables with merged cells,
 captions, multiple header and body sections, and multiline Markdown.
 
-The current development build uses one Rust parser/writer compiled to WebAssembly.
-The former TypeScript parser/writer has been removed; its verified behavior is
-preserved in frozen regression contracts. This migration has not been published
-to npm yet.
+The parser and writer share a Rust core compiled to WebAssembly, with synchronous
+JavaScript APIs and TypeScript declarations.
 
 - **Parse:** get structured data, source ranges, and merged-cell origins from a
   standalone core.
@@ -19,6 +17,8 @@ to npm yet.
 - **Write:** generate table Markdown from structured data with span validation.
 
 [API reference](https://github.com/Murlors/multimd-table/blob/main/docs/api.md)
+
+If you find multimd-table useful, please consider [giving it a star on GitHub](https://github.com/Murlors/multimd-table).
 
 ```markdown
 [Quarterly sales]
