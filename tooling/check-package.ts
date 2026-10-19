@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { cp, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +8,7 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const temporary = await mkdtemp(join(tmpdir(), "multimd-package-"));
 const bun = process.execPath;
+const firstImports: Record<string, unknown> = {};
 
 /** 子进程只接收参数数组；失败时保留阶段信息，不回显可能含凭据的安装日志。 */
 function run(command: string[], cwd: string): string {
@@ -49,10 +51,31 @@ assert.equal(grid[1][1].inherited, true);
 assert.equal(grid[0][0].origin.colspan, 2);
 assert.equal(grid[0][0].origin.rowspan, 2);
 const scanner = new TableScanner();
+try {
 assert.equal(scanner.push("A|B", 0), true);
 assert.equal(scanner.push("-|-", 4), true);
 assert.ok(scanner.finish());
+} finally { scanner.dispose(); }
 console.log("core runtime passed");
+`;
+
+const lifecycleProbe = String.raw`
+const { runtime } = await import("./node_modules/multimd-table/dist/internal/backend.js");
+const live = new TableScanner();
+assert.equal(runtime.activeScanners(), 0);
+live.push("A|B", 2 ** 40);
+live.push("-|-", 2 ** 40 + 4);
+assert.equal(runtime.activeScanners(), 1);
+assert.equal(live.finish().range.end, 2 ** 40 + 7);
+live.dispose();
+assert.equal(runtime.activeScanners(), 0);
+const large = ["A|B|C|D", "-|-|-|-", ...Array.from({ length: 5000 }, (_, i) => i + "|value|code|tail")].join("\n");
+for (let i = 0; i < 20; i++) assert.ok(parseTable(large));
+const warmMemory = runtime.memoryBytes();
+for (let i = 0; i < 100; i++) assert.ok(parseTable(large));
+assert.equal(runtime.memoryBytes(), warmMemory, "WASM memory grew after warmup");
+assert.equal(runtime.activeScanners(), 0);
+console.log(JSON.stringify({ warmMemory, finalMemory: runtime.memoryBytes(), callsAfterWarmup: 100 }));
 `;
 
 const writerProbe = `
@@ -144,6 +167,7 @@ const options: Options = { rowspan: true, multiline: true };
 const table: Table | null = parseTable("A|B\\n-|-", options);
 const scanner = new TableScanner(options);
 scanner.push("A|B", 0);
+scanner.dispose();
 if (table) {
   const value: string | undefined = expandSection(table.sections[0]!)[0]?.[0]?.value;
   void value;
@@ -205,7 +229,7 @@ await compile("A|B\\n-| -", { remarkPlugins: [[multimd, { rowspan: true }]] });
 `;
 
 const consumers = {
-  core: { runtime: coreProbe, types: coreTypes, dependencies: [] },
+  core: { runtime: coreProbe + lifecycleProbe, types: coreTypes, dependencies: [] },
   writer: { runtime: writerProbe, types: writerTypes, dependencies: [] },
   remark: {
     runtime: remarkProbe, types: remarkTypes,
@@ -216,6 +240,10 @@ const consumers = {
   mdx: {
     runtime: mdxProbe, types: mdxTypes,
     dependencies: ["@mdx-js/mdx", "react", "react-dom", "@types/react", "@types/react-dom", "remark-gfm", "unified", "mdast-util-from-markdown"],
+  },
+  browser: {
+    runtime: coreProbe, types: coreTypes,
+    dependencies: ["unified", "mdast-util-from-markdown", "remark-parse", "remark-rehype", "rehype-stringify", "marked", "markdown-it"],
   },
 } as const;
 
@@ -228,12 +256,12 @@ try {
   for (const entry of entries) {
     assert.ok(!entry.startsWith("/") && !entry.split("/").includes(".."), `Unsafe archive path: ${entry}`);
     if (entry.endsWith("/")) {
-      assert.match(entry, /^package\/(?:dist\/)?$/, `Unexpected archive directory: ${entry}`);
+      assert.match(entry, /^package\/(?:dist\/(?:internal\/)?)?$/, `Unexpected archive directory: ${entry}`);
       continue;
     }
     assert.match(
       entry,
-      /^package\/(?:package\.json|README\.md|LICENSE|dist\/[\w-]+\.(?:js|d\.ts))$/,
+      /^package\/(?:package\.json|README\.md|LICENSE|dist\/(?:[\w-]+\.(?:js|d\.ts)|internal\/[\w-]+\.(?:js|mjs)))$/,
       `Unexpected packaged file: ${entry}`,
     );
     const content = run(["tar", "-xOzf", archive, entry], root);
@@ -256,6 +284,11 @@ try {
     "package/dist/marked.d.ts",
     "package/dist/markdown-it.js",
     "package/dist/markdown-it.d.ts",
+    "package/dist/types.d.ts",
+    "package/dist/internal/backend.js",
+    "package/dist/internal/wasm.mjs",
+    "package/dist/internal/wire.mjs",
+    "package/dist/internal/wasm-data.js",
   ];
   assert.deepEqual([...files].sort(), required.sort(), "Published files must match the package entries");
   console.log(`[package] archive contents passed without source maps or TS sources (${files.size} files)`);
@@ -306,6 +339,7 @@ try {
         noEmit: true,
         skipLibCheck: false,
         types: [],
+        ...(["core", "writer"].includes(kind) ? { lib: ["ES2022"] } : {}),
       },
       files: ["consumer.ts"],
     });
@@ -313,7 +347,44 @@ try {
     run(["node", "runtime.mjs"], directory);
     run([bun, join(directory, "node_modules/typescript/bin/tsc"), "-p", "tsconfig.json"], directory);
     console.log(`[package] ${kind}: clean install, Bun, Node and TypeScript passed`);
+    if (kind === "core") {
+      await writeFile(join(directory, "startup.mjs"), String.raw`
+const start = performance.now();
+const { parseTable } = await import("multimd-table");
+const initializationMs = performance.now() - start;
+if (!parseTable("A|B\n-|-\nx|y")) throw new Error("First parse failed");
+console.log(JSON.stringify({ initializationMs, version: process.versions.bun ?? process.versions.node }));
+`);
+      for (const engine of [bun, "node"]) {
+        const name = engine === bun ? "Bun" : "Node";
+        firstImports[name] = JSON.parse(run([engine, "startup.mjs"], directory));
+        console.log(`[package] first import ${name}: ${JSON.stringify(firstImports[name])}`);
+      }
+    }
+    if (kind === "browser") {
+      const output = join(root, ".performance/package-browser");
+      await mkdir(output, { recursive: true });
+      for (const name of ["browser.mjs", "worker.mjs"]) await cp(join(root, "test/package", name), join(directory, name));
+      const results = await Promise.all([false, true].map(worker => Bun.build({
+        entrypoints: [join(directory, worker ? "worker.mjs" : "browser.mjs")],
+        outdir: output, target: "browser", minify: true,
+        // micromark 的实体解码器为 Worker 提供无 document 的条件导出。
+        conditions: worker ? ["worker"] : ["browser"],
+      })));
+      for (const result of results) if (!result.success) throw new AggregateError(result.logs, "Packed browser build failed");
+      await cp(join(installed, "dist"), join(output, "package/dist"), { recursive: true });
+      for (const name of ["index.html", "main.mjs"]) await cp(join(root, "test/package", name), join(output, name));
+      console.log(`[package] browser bundles and unbundled package copied to ${output}`);
+    }
   }
+  const acceptance = join(root, ".performance/package-acceptance");
+  await mkdir(acceptance, { recursive: true });
+  await cp(archive, join(acceptance, "package.tgz"));
+  const bytes = await readFile(archive);
+  await json(join(acceptance, "report.json"), {
+    createdAt: new Date().toISOString(), files: [...files].sort(), consumers: Object.keys(consumers), firstImports,
+    archive: { bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") },
+  });
 } finally {
   // 只删除本脚本创建的随机临时目录，不触碰开发仓库或调用方目录。
   await rm(temporary, { recursive: true, force: true });

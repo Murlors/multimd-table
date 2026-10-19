@@ -68,6 +68,7 @@ function multimdSyntax(
   options: RemarkOptions,
   getSource: () => string | undefined,
   initialize: (parser: ParseContext) => void,
+  track: (scanner: TableScanner) => () => void,
 ): Extension {
   const failedHeaders = new WeakMap<object, Set<number>>();
   const tokenize: Tokenizer = function (effects, ok, nok) {
@@ -78,6 +79,7 @@ function multimdSyntax(
     failedHeaders.set(context.parser, failed);
     if (failed.has(context.now().offset)) return nok;
     const scanner = new TableScanner(options);
+    const release = track(scanner);
     const lineStarts: Point[] = [];
     let table: TableToken;
     let concrete = false;
@@ -150,7 +152,8 @@ function multimdSyntax(
       return effects.attempt(continuation, afterLine, finish)(code);
     }
     function finish(code: number | null): State | undefined {
-      const model = scanner.finish();
+      let model: Table | null;
+      try { model = scanner.finish(); } finally { release(); }
       if (!model) return fail(code);
       table.table = model;
       table.lineStarts = lineStarts;
@@ -161,6 +164,7 @@ function multimdSyntax(
       // 无分隔行的连续管道文本，其后缀也不可能成为表格；避免逐行重复试探整段。
       if (!scanner.committed)
         for (const point of lineStarts) failed.add(point.offset);
+      release();
       return nok(code);
     }
   };
@@ -483,6 +487,12 @@ function hydrate(
 const remarkMultimdTable: Plugin<[RemarkOptions?], Root> =
   function (options = {}) {
     let source: string | undefined;
+    let scanners = new Set<TableScanner>();
+    const track = (scanner: TableScanner) => {
+      const scope = scanners;
+      scope.add(scanner);
+      return () => { scope.delete(scanner); scanner.dispose(); };
+    };
     const state: ParseState = {
       links: [], footnotes: [], depth: 0, hasTableDefinitions: false,
     };
@@ -490,11 +500,15 @@ const remarkMultimdTable: Plugin<[RemarkOptions?], Root> =
     function withSource<T>(value: string, parse: () => T): T {
       const previous = source;
       const previousDepth = state.depth;
+      const previousScanners = scanners;
+      scanners = new Set();
       source = value;
       state.depth++;
       try {
         return parse();
       } finally {
+        for (const scanner of scanners) scanner.dispose();
+        scanners = previousScanners;
         source = previous;
         state.depth = previousDepth;
       }
@@ -528,7 +542,7 @@ const remarkMultimdTable: Plugin<[RemarkOptions?], Root> =
     const data = this.data();
     const syntax = (data.micromarkExtensions ||= []);
     const mdast = (data.fromMarkdownExtensions ||= []);
-    syntax.push(multimdSyntax(options, () => source, initializeReferences(state)));
+    syntax.push(multimdSyntax(options, () => source, initializeReferences(state), track));
     mdast.push(multimdFromMarkdown(() => ({ syntax, mdast }), withSource, state));
   };
 

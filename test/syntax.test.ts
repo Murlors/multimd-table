@@ -1,5 +1,7 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { cellBounds, parseTable, expandSection, TableScanner } from "../src/core.js";
+import { runtime } from "../src/internal/backend.js";
+afterEach(() => runtime.disposeScanners());
 
 test("pipe scanning distinguishes escape parity, matched tick runs and literal ticks", () => {
   const values: [string, string[]][] = [

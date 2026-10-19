@@ -130,6 +130,9 @@ async function main() {
   for (const name of ["core", "writer", "remark", "marked", "markdown-it"]) {
     modules[name] = digest(await readFile(resolve(root, "dist", `${name}.js`)));
   }
+  for (const name of ["backend.js", "wasm-data.js", "wasm.mjs", "wire.mjs"]) {
+    modules[`internal/${name}`] = digest(await readFile(resolve(root, "dist/internal", name)));
+  }
   const hosts: Record<string, string> = {};
   for (const name of ["unified", "remark-parse", "remark-rehype", "rehype-stringify", "mdast-util-from-markdown", "marked", "markdown-it"]) {
     hosts[name] = JSON.parse(await readFile(resolve(root, "node_modules", name, "package.json"), "utf8")).version;

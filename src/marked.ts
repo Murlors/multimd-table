@@ -58,28 +58,31 @@ function nextTableStart(
   let scanner: TableScanner | undefined;
   let start = offset;
   let previousContinued = false;
-  while (offset < source.length) {
-    const newline = source.indexOf("\n", offset);
-    const end = newline < 0 ? source.length : newline;
-    const value = source.slice(offset, end);
-    const continued = !!options.multiline && (previousContinued || value.endsWith("\\"));
-    const hostBlock = !scanner?.committed && startsHostBlock(value, lexer, continued);
-    if (hostBlock) {
-      scanner = undefined;
-      previousContinued = false;
-    } else {
-      if (scanner && !scanner.push(value, offset)) scanner = undefined;
-      if (!scanner) {
-        scanner = new TableScanner(options);
-        start = offset;
-        if (!scanner.push(value, offset)) scanner = undefined;
+  try {
+    while (offset < source.length) {
+      const newline = source.indexOf("\n", offset);
+      const end = newline < 0 ? source.length : newline;
+      const value = source.slice(offset, end);
+      const continued = !!options.multiline && (previousContinued || value.endsWith("\\"));
+      const hostBlock = !scanner?.committed && startsHostBlock(value, lexer, continued);
+      if (hostBlock) {
+        scanner?.dispose();
+        scanner = undefined;
+        previousContinued = false;
+      } else {
+        if (scanner && !scanner.push(value, offset)) { scanner.dispose(); scanner = undefined; }
+        if (!scanner) {
+          scanner = new TableScanner(options);
+          start = offset;
+          if (!scanner.push(value, offset)) { scanner.dispose(); scanner = undefined; }
+        }
+        previousContinued = !!scanner && !!options.multiline && value.endsWith("\\");
+        if (scanner?.accepted) return start;
       }
-      previousContinued = !!scanner && !!options.multiline && value.endsWith("\\");
-      if (scanner?.accepted) return start;
+      if (newline < 0) break;
+      offset = newline + 1;
     }
-    if (newline < 0) break;
-    offset = newline + 1;
-  }
+  } finally { scanner?.dispose(); }
 }
 
 /** 块单元格共享文档引用定义；嵌套解析结束后恢复外层 lexer 的状态。 */
@@ -171,25 +174,28 @@ export function markedMultimdTable(options: Options = {}): MarkedExtension {
           let scannedEnd = 0;
           let previousContinued = false;
           const failedLengths: number[] = [];
-          while (offset < source.length) {
-            const newline = source.indexOf("\n", offset);
-            const end = newline < 0 ? source.length : newline;
-            const value = source.slice(offset, end);
-            const continued = !!settings.multiline && (previousContinued || value.endsWith("\\"));
-            if (!scanner.committed && startsHostBlock(value, this.lexer, continued)) break;
-            if (!scanner.push(value, offset)) break;
-            previousContinued = !!settings.multiline && value.endsWith("\\");
-            if (!scanner.committed) {
-              failedLengths.push(source.length - offset);
-              // 原生 text 不消费行末换行；space 回调仍在同一个已否定的候选段内。
-              if (newline >= 0) failedLengths.push(source.length - end);
+          let model: Table | null;
+          try {
+            while (offset < source.length) {
+              const newline = source.indexOf("\n", offset);
+              const end = newline < 0 ? source.length : newline;
+              const value = source.slice(offset, end);
+              const continued = !!settings.multiline && (previousContinued || value.endsWith("\\"));
+              if (!scanner.committed && startsHostBlock(value, this.lexer, continued)) break;
+              if (!scanner.push(value, offset)) break;
+              previousContinued = !!settings.multiline && value.endsWith("\\");
+              if (!scanner.committed) {
+                failedLengths.push(source.length - offset);
+                // 原生 text 不消费行末换行；space 回调仍在同一个已否定的候选段内。
+                if (newline >= 0) failedLengths.push(source.length - end);
+              }
+              scannedEnd = newline < 0 ? end : end + 1;
+              if (scanner.finished) break;
+              if (newline < 0) break;
+              offset = newline + 1;
             }
-            scannedEnd = newline < 0 ? end : end + 1;
-            if (scanner.finished) break;
-            if (newline < 0) break;
-            offset = newline + 1;
-          }
-          const model = scanner.finish();
+            model = scanner.finish();
+          } finally { scanner.dispose(); }
           if (!model) {
             if (!scanner.committed && failedLengths.length) {
               const failed: FailedHeaders = {
