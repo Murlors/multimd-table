@@ -1,7 +1,9 @@
-import { copyFile, mkdir } from "node:fs/promises";
+import { copyFile, mkdir, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "..");
+// dist 完全由构建生成；先移除旧输出，避免已删除入口或 source map 留在本地。
+await rm(resolve(root, "dist"), { recursive: true, force: true });
 for (const command of [
   [process.execPath, "tooling/prepare-wasm.ts"],
   [process.execPath, "node_modules/typescript/bin/tsc", "-p", "tsconfig.build.json"],
