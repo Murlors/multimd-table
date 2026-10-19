@@ -40,4 +40,5 @@ jobs:
         with:
           name: performance-${{ github.sha }}
           path: .performance/ci-*.json
+          include-hidden-files: true
           if-no-files-found: error
