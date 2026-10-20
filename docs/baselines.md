@@ -12,12 +12,14 @@ builds and isolated packed-package consumers. CI uses this same complete gate.
 share `tooling/prepare-wasm.ts` to prepare the locked Rust/WASM module automatically.
 `vp check` checks the whole workspace, including Playground types. Verification
 and measurement commands do not cache results.
+The root test config collects the JS package's production/development projects
+and the Playground project. `vp -C packages/js test` runs only the JS/transport projects.
 
 The baseline combines existing hand-written syntax contracts and new generated checks:
 
 - All three adapters render the shared syntax cases and all 32 option combinations
   against explicit expected HTML. Host-specific behavior has separate tests.
-- `test/baseline.test.ts` compares pipe boundaries against an independent, slow
+- `packages/js/test/baseline.test.ts` compares pipe boundaries against an independent, slow
   reference scanner for all 87,381 strings over `a`, `|`, backtick and backslash
   through length 8, plus 3,000 seeded Unicode/whitespace/delimiter-run samples.
 - Another 1,000 seeded documents exercise malformed input, mixed line endings,
@@ -31,13 +33,13 @@ The baseline combines existing hand-written syntax contracts and new generated c
   Unrepresentable content must still fail explicitly.
 - Performance fixtures are also checked for expected section row counts and source
   coordinates, so shortening the parsed input cannot silently look like a speedup.
-- `test/runtime.test.ts` checks lazy scanner allocation, deterministic and scoped
+- `packages/js/test/runtime.test.ts` checks lazy scanner allocation, deterministic and scoped
   plugin cleanup, exception paths, mutable options, large document offsets and
   independent snapshots. Test teardown releases scanners explicitly held by older
   cases; lifecycle assertions run before that cleanup.
-- `test/contracts.ts` verifies 2,130 complete parser/writer cases and seven Unicode
+- `packages/js/test/contracts.ts` verifies 2,130 complete parser/writer cases and seven Unicode
   writer boundaries against frozen results from the former TS implementation.
-  `test/fixtures/core-contracts.json` stores SHA-256 summaries in groups of at most
+  `contracts/core-contracts.json` stores SHA-256 summaries in groups of at most
   100 cases, plus incremental scanner contracts. Object keys are sorted before
   hashing; arrays, strings and ranges remain significant. Failures identify the
   affected group. Intentional contract changes require review rather than automatic
@@ -68,7 +70,7 @@ vp run bench --quick --out .performance/smoke
 `bench` builds the production modules before measuring and runs the same TypeScript
 script directly on Node and Bun. It
 does not install dependencies, fetch an old release or modify library sources.
-Every build recreates `dist/`, so removed entry points and old source maps cannot
+Every build recreates `packages/js/dist/`, so removed entry points and old source maps cannot
 survive in the generated output.
 Reports use exclusive creation: existing results are never overwritten.
 
@@ -111,8 +113,8 @@ and use full local runs for performance decisions. Machine-specific reports and 
 generated vectors stay under ignored `.performance/`, outside the npm package.
 
 The [Rust shared core](../crates/core/README.md) supplies the default package and
-the native Python/Go probes. `core:check` validates frozen regression contracts
-and the native bindings; `core:profile` isolates transport, Rust execution and
+the native Python package and Go probe. `core:check` validates frozen regression contracts
+and the Go binding; the Python acceptance command validates the installed native package; `core:profile` isolates transport, Rust execution and
 object construction. `bench` and `bench:compare` maintain performance comparisons
 between saved reports.
 
@@ -145,7 +147,7 @@ does not establish that the isolated preview document rendered.
 A consumer's existing Bun tests can run against that exact tarball:
 
 ```sh
-bun tooling/check-consumer.ts ../consumer tests/table-editor.test.ts
+bun packages/js/tooling/check-consumer.ts ../consumer tests/table-editor.test.ts
 ```
 
 The runner verifies the archive hash, unpacks inside this repository's
@@ -172,7 +174,7 @@ document, or share an example through a URL fragment.
 
 ```sh
 vp install
-vp -C playground dev
+vp dev
 ```
 
 Open `http://127.0.0.1:4173`. Vite updates the page as sources change. No Rust toolchain is needed. Parsing and rendering run in a
@@ -180,7 +182,7 @@ browser Worker; input is not uploaded. Preview runs in a sandbox with scripts an
 remote content disabled. Share links contain their Markdown, so only share input
 you intend others to read.
 
-Run `vp -C playground check`, `vp -C playground test` and `vp -C playground build`
+Run `vp -C playground check`, `vp -C playground test` and `vp build`
 for static checks, boundary tests and a production build. The deployable files are in `playground/dist/`; their relative asset URLs
 also work under a project subdirectory. Serve them with any static host.
 
@@ -191,6 +193,29 @@ When updating the demo, change its npm release pin and displayed version togethe
 then test, build and run the deployment workflow.
 
 ## Development
+
+The root is a private workspace. `packages/js/` owns the npm package and its tests;
+`packages/python/` owns the Python package and PyO3 bridge. Both use `crates/core/`.
+Frozen compatibility hashes live once in `contracts/core-contracts.json`.
+
+Cross-language tooling and the shared performance corpus stay in `tooling/`.
+JS package acceptance, downstream-consumer checks and benchmarks live in
+`packages/js/tooling/`. Playground remains a separate workspace using the published
+npm release. Package names and public import paths are unchanged.
+
+`bunfig.toml` disables implicit workspace linking so the demo's npm alias remains
+the registry package. Playground tests check its resolved location and version.
+
+The npm README is generated from the root README during the JS build, with absolute
+documentation links. Publish npm from `packages/js/`, never from the private root.
+The JS package's `prepack` checks its own sources, tests, build and packed consumers;
+CI runs the complete repository gate separately.
+
+The root config sets default targets: `vp pack` packages the JS library, while
+`vp dev`, `vp build` and `vp preview` operate on Playground. The root has no build
+script forwarding to a child package. Explicit `vp -C <package>` commands still work.
+With Vite+ 1.3, pass app-command arguments with an explicit target, for example
+`vp -C playground dev --port 4187`; bare-command defaults do not route these calls.
 
 Use Vite+ with the latest Node.js LTS (`vp env default lts`) and the Bun version
 declared in `packageManager`. Vite+ and shared markdown-it versions are declared
@@ -203,19 +228,36 @@ Rust and the `wasm32-unknown-unknown` target
 | ----------------------- | --------------------------------------------------------------------------------------- |
 | `vp check`              | Format, lint and type checks across the repository                                      |
 | `vp test`               | Library/transport tests in production and development conditions, plus Playground tests |
-| `vp pack`               | ESM entry points and declarations, checked by publint and Are the Types Wrong           |
-| `vp -C playground dev`  | Playground with live updates                                                            |
+| `vp pack`               | JS ESM entry points and declarations, checked by publint and Are the Types Wrong        |
+| `vp dev`                | Playground with live updates                                                            |
+| `vp build`              | Playground production build                                                             |
+| `vp preview`            | Serve the Playground production build                                                   |
 | `vp run verify`         | Complete gate: static checks, Rust/tests, both builds and isolated package consumers    |
 | `vp run verify:package` | Build and validate only the actual tarball in Node, Bun, TypeScript and browser bundles |
+| `vp run verify:python`  | Build and validate the Python wheel and source archive in an isolated consumer          |
 
 Tests and packaging share one Rust/WASM preparation function. Filter tests with
 `vp test --project production`, `--project development` or `--project playground`.
-Run `vp check` before committing; CI and package creation run the complete gate.
+Run `vp check` before committing. CI runs the complete gate; npm package creation
+runs the JS package's scoped checks and consumer acceptance.
 Verification and performance measurements always execute without task caching.
+
 Formatting and lint rules use Oxfmt/Oxlint defaults with type-aware checks enabled.
 The frozen compatibility fixture is excluded from formatting.
+
+Vite+, Vite, TypeScript and Bun types are declared once in the root dev dependencies.
+Host libraries and integration-test dependencies belong to the JS package or Playground.
+Only the root declares `packageManager`; all workspaces use the root Bun lockfile.
+
 Declaration generation currently uses the TypeScript 6 compiler API; adopting
 TypeScript 7 requires compatible declaration tooling.
+
+Python acceptance additionally requires Rust and a CPython build environment with
+maturin and mypy. `vp run verify:python` prepares the shared WASM core before
+exporting contract vectors; no earlier JS build is required.
+See the [Python development guide](../packages/python/README.md#development).
+CI checks CPython 3.11 and 3.14 on Linux, macOS and Windows; a configured matrix is
+not evidence that every platform has passed locally.
 
 `vp run bench --out .performance/baseline` measures the core, writer and adapters
 on Node and Bun. The same TypeScript runner executes directly in both runtimes.

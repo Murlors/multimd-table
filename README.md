@@ -11,6 +11,9 @@ or write table data back to Markdown.
 
 [Integrations](#integrations) · [API reference](docs/api.md)
 
+The [Python development package](packages/python/README.md) provides the same core API
+through a native Rust extension. It is not yet published to PyPI.
+
 ## Install
 
 ```sh
@@ -155,8 +158,9 @@ share content you intend others to read.
 
 ## Development
 
-Use Vite+, the Bun version in `packageManager`, Rust and the
-`wasm32-unknown-unknown` target.
+Run shared development commands from the repository root. Use Vite+, the latest
+Node.js LTS and the Bun version declared in the root `packageManager`.
+Full core checks also require Rust and the `wasm32-unknown-unknown` target.
 
 ```sh
 git clone https://github.com/Murlors/multimd-table.git
@@ -165,9 +169,31 @@ vp install
 vp run verify
 ```
 
-The full check covers static checks, Rust and JavaScript tests, builds and isolated
-package consumers. See [development commands](docs/baselines.md#development)
-for focused checks and Playground development.
+The root is a private workspace; it is not the npm package. Each language package
+owns its public API and packaging, and both use the same Rust implementation:
+
+| Location                                 | Responsibility                                                                                 |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Root `package.json` and `vite.config.ts` | Shared tools, workspace settings and repository-wide checks; not published.                    |
+| `packages/js/`                           | The published `multimd-table` npm package: ESM entries, types, JS adapters and package checks. |
+| `packages/python/`                       | The Python core package and PyO3 bridge; not yet published to PyPI.                            |
+| `crates/core/`                           | The shared Rust grammar and writer.                                                            |
+| `contracts/`                             | Frozen compatibility expectations shared across languages.                                     |
+| `playground/`                            | The browser demo, using the pinned npm release.                                                |
+
+The JS package's `package.json` defines the npm version, exports and dependencies.
+The root manifest defines the shared development environment and selects workspaces.
+Install workspace dependencies once at the root with `vp install`.
+
+`vp pack` builds the JS library. `vp dev`, `vp build` and `vp preview` operate on
+Playground. `vp run verify` checks Rust and JavaScript, both production builds and
+isolated npm consumers. Python wheel and source-package acceptance use
+`vp run verify:python` with the [Python build environment](packages/python/README.md#development).
+
+Edit this root README for shared project documentation. The JS build generates
+`packages/js/README.md` from it and converts documentation links for npm;
+do not maintain that generated copy separately. See
+[development commands](docs/baselines.md#development) for focused checks and VP argument handling.
 
 ## Feedback and support
 
