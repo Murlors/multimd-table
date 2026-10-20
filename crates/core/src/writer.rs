@@ -1,37 +1,11 @@
 use crate::core::*;
 use crate::wire::Input;
-use regex::bytes::Regex;
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::sync::OnceLock;
-
-macro_rules! re {
-    ($pattern:literal) => {{
-        static RE: OnceLock<Regex> = OnceLock::new();
-        RE.get_or_init(|| {
-            let pattern = concat!("(?-u)", $pattern).replace(r"\s", r"[\t\n\x0b\x0c\r \x81\x82]");
-            Regex::new(&pattern).unwrap()
-        })
-    }};
-}
+mod syntax;
+use syntax::*;
 fn invalid(message: &str) -> String {
     format!("Cannot stringify MultiMarkdown table: {message}")
-}
-/// ASCII 语法正则使用等长影子字节，捕获坐标仍对应原始 UTF-16，替换只操作原文。
-fn shadow(s: &[u16]) -> Vec<u8> {
-    s.iter()
-        .map(|&c| {
-            if c < 128 {
-                c as u8
-            } else if matches!(c, 0x2028 | 0x2029) {
-                130
-            } else if whitespace(c) {
-                129
-            } else {
-                128
-            }
-        })
-        .collect()
 }
 fn append(out: &mut Text, s: &str) {
     out.extend(s.encode_utf16());
@@ -42,7 +16,6 @@ fn inline(value: &[u16]) -> Result<Cow<'_, [u16]>, String> {
     if !value.iter().any(|c| matches!(c, 10 | 60 | 92 | 96 | 124)) {
         return Ok(Cow::Borrowed(value));
     }
-    let mut mask = None;
     let mut runs = Vec::new();
     let mut cursor = 0;
     while cursor < value.len() {
@@ -72,11 +45,7 @@ fn inline(value: &[u16]) -> Result<Cow<'_, [u16]>, String> {
     let mut i = 0;
     while i < value.len() {
         if value[i] == 60 {
-            let mask = mask.get_or_insert_with(|| shadow(value));
-            let tag = re!(r#"^</?([A-Za-z][A-Za-z0-9-]*)(?:\s+[A-Za-z_:][A-Za-z0-9_.:-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?)*\s*/?>"#).captures(&mask[i..]);
-            if let Some(tag) = tag {
-                let length = tag[0].len();
-                let name = tag.get(1).unwrap().as_bytes().to_ascii_lowercase();
+            if let Some((length, name)) = html_tag(&value[i..]) {
                 for &c in &value[i..i + length] {
                     if c == 124 {
                         append(&mut out, "&#124;");
@@ -85,24 +54,26 @@ fn inline(value: &[u16]) -> Result<Cow<'_, [u16]>, String> {
                     }
                 }
                 let raw = [b"code".as_slice(), b"pre", b"script", b"style", b"textarea"]
-                    .contains(&name.as_slice());
+                    .iter()
+                    .any(|expected| ascii_case_eq(name, expected));
                 let opening =
-                    value.get(i + 1) != Some(&47) && !mask[i..i + length].ends_with(b"/>");
+                    value.get(i + 1) != Some(&47) && !value[i..i + length].ends_with(&[47, 62]);
+                let escape_raw = [b"code".as_slice(), b"pre", b"textarea"]
+                    .iter()
+                    .any(|expected| ascii_case_eq(name, expected));
                 i += length;
                 if raw && opening {
-                    let end = re!(r"(?i)</(code|pre|script|style|textarea)\s*>")
-                        .captures_iter(&mask[i..])
-                        .find(|c| c.get(1).unwrap().as_bytes().eq_ignore_ascii_case(&name))
-                        .map_or(value.len(), |c| i + c.get(0).unwrap().end());
-                    if re!(r"[ \t]+\n").is_match(&mask[i..end]) {
+                    let end = i + raw_html_end(&value[i..], name);
+                    if value[i..end]
+                        .windows(2)
+                        .any(|pair| matches!(pair, [32 | 9, 10]))
+                    {
                         return Err(invalid(
                             "trailing whitespace in raw HTML content is not preserved by MultiMarkdown tables",
                         ));
                     }
                     for &c in &value[i..end] {
-                        if matches!(name.as_slice(), b"code" | b"pre" | b"textarea")
-                            && matches!(c, 124 | 96)
-                        {
+                        if escape_raw && matches!(c, 124 | 96) {
                             append(&mut out, if c == 124 { "&#124;" } else { "&#96;" });
                         } else {
                             out.push(c);
@@ -112,11 +83,8 @@ fn inline(value: &[u16]) -> Result<Cow<'_, [u16]>, String> {
                 }
                 continue;
             }
-            if let Some(link) =
-                re!(r"^<(?:[A-Za-z][A-Za-z0-9+.-]{1,31}:[^\x00-\x20<>]*|[^<>\s]*@[^<>\s]+)>")
-                    .find(&mask[i..])
-            {
-                let end = i + link.end();
+            if let Some(length) = autolink_end(&value[i..]) {
+                let end = i + length;
                 if value[i..end].contains(&124) {
                     return Err(invalid(
                         "autolink containing pipes must be serialized as an explicit Markdown link by the host",
@@ -282,7 +250,7 @@ fn content_lines(cell: &WriteCell<'_>) -> Result<Vec<Text>, String> {
     }
     let mut output = Vec::new();
     let mut prose = Vec::new();
-    let mut fence: Option<(u8, usize)> = None;
+    let mut fence: Option<(u16, usize)> = None;
     fn flush(prose: &mut Text, pending: &mut bool, output: &mut Vec<Text>) -> Result<(), String> {
         if *pending {
             output.extend(inline(prose)?.split(|&c| c == 10).map(<[u16]>::to_vec));
@@ -293,17 +261,12 @@ fn content_lines(cell: &WriteCell<'_>) -> Result<Vec<Text>, String> {
     }
     let mut pending = false;
     for line in value.split(|&c| c == 10) {
-        let mask = shadow(line);
-        let quote = re!(r"^\s*(?:>\s*)+").find(&mask).map_or(0, |m| m.end());
-        let list = re!(r"^\s*(?:[-+*]|\d+[.)])\s+")
-            .find(&mask[quote..])
-            .map_or(0, |m| m.end());
-        let candidate = &mask[quote + list..];
-        let opening = re!(r"^\s*(`{3,}|~{3,})([^\r\n\x82]*)$").captures(candidate);
+        let candidate = &line[container_start(line)..];
+        let opening = opening_fence(candidate);
         let code = fence.is_some()
             || opening.is_some()
-            || mask.starts_with(b"    ")
-            || mask.starts_with(b"\t");
+            || line.starts_with(&[32; 4])
+            || line.starts_with(&[9]);
         if code {
             flush(&mut prose, &mut pending, &mut output)?;
             let mut wrapped = vec![124];
@@ -321,13 +284,11 @@ fn content_lines(cell: &WriteCell<'_>) -> Result<Vec<Text>, String> {
             }
             output.push(line.to_vec());
             if let Some((marker, length)) = fence {
-                if let Some(closing) = re!(r"^\s*(`+|~+)\s*$").captures(candidate) {
-                    if closing[1][0] == marker && closing[1].len() >= length {
-                        fence = None;
-                    }
+                if closing_fence(candidate, marker, length) {
+                    fence = None;
                 }
             } else if let Some(opening) = opening {
-                fence = Some((opening[1][0], opening[1].len()));
+                fence = Some(opening);
             }
         } else {
             if pending {
@@ -371,12 +332,9 @@ fn caption(c: &WriteCaption<'_>) -> Result<Text, String> {
         }
         source.push(93);
     }
-    let mask = shadow(&source);
-    let parsed = re!(r"^\s*\[([^\r\n\x82]+?)\](\[([^\[\]]+)\])?\s*$")
-        .captures(&mask)
+    let end = caption_value_end(&source)
         .ok_or_else(|| invalid("caption Markdown is ambiguous with an explicit label"))?;
-    let capture = parsed.get(1).unwrap();
-    if &source[capture.start()..capture.end()] != c.value.as_ref() {
+    if &source[1..end] != c.value.as_ref() {
         return Err(invalid(
             "caption Markdown is ambiguous with an explicit label",
         ));
@@ -494,17 +452,13 @@ pub fn stringify(table: &WriteTable<'_>) -> Result<Text, String> {
                             replacement.extend_from_slice(&value[1..]);
                             value = Cow::Owned(replacement);
                         }
-                        let mask = shadow(&value);
-                        if re!(r"^ {0,3}(?:#{1,6}(?:\s|$)|>|[-+*]\s|\d{1,9}[.)]\s)").is_match(&mask)
-                            || re!(r"^ {0,3}(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$")
-                                .is_match(&mask)
-                        {
-                            if let Some(m) = re!(r"^([ ]{0,3})([#>+*_-]|\d+[.)])").captures(&mask) {
-                                value.to_mut().insert(m.get(2).unwrap().end() - 1, 92);
-                            }
+                        if let Some(position) = promotion_escape(&value) {
+                            value.to_mut().insert(position, 92);
                         }
-                        if re!(r"(?i)^ {0,3}(?:<(?:!--|!|\?|/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)\b)|\[[^\]]+\]:)").is_match(&shadow(&value)) {
-                            return Err(invalid("inline HTML block or reference definition cannot be promoted to a multiline block row without changing semantics"));
+                        if promotion_rejected(&value) {
+                            return Err(invalid(
+                                "inline HTML block or reference definition cannot be promoted to a multiline block row without changing semantics",
+                            ));
                         }
                     }
                     if !block && delimiter_value(trim(&value)) {
@@ -631,20 +585,4 @@ pub fn decode(bytes: &[u8]) -> Result<WriteTable<'_>, String> {
 
 pub fn decode_and_write(bytes: &[u8]) -> Result<Text, String> {
     stringify(&decode(bytes)?)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn javascript_unicode_whitespace_is_not_ascii_padding() {
-        for unit in [0xa0, 0x2028, 0x2029, 0xfeff] {
-            let mask = shadow(&[unit]);
-            assert!(re!(r"^\s$").is_match(&mask));
-            assert!(!re!(r"^[ \t]$").is_match(&mask));
-            assert!(!re!(r"^[^\s]$").is_match(&mask));
-            assert!(re!(r"^[^\x00-\x20]$").is_match(&mask));
-        }
-        assert!(!re!(r"^(`{3,})([^\r\n\x82]*)$").is_match(&shadow(&text("```a\u{2028}b"))));
-    }
 }

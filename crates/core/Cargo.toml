@@ -8,10 +8,8 @@ license = "MIT"
 [lib]
 crate-type = ["rlib", "cdylib"]
 
-[dependencies]
-regex = { version = "1.12", default-features = false, features = ["std", "perf"] }
-
 [profile.release]
 lto = true
 codegen-units = 1
 panic = "abort"
+strip = "symbols"

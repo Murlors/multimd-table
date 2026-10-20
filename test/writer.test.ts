@@ -75,6 +75,13 @@ function basic(value = "value"): WriteTable {
   };
 }
 
+test("long malformed angle-bracket runs remain literal during writing", () => {
+  const value = "<a".repeat(20_000);
+  const source = stringifyTable(basic(value));
+  expect(source).toBe(`|---|---|\n| ${value} |  |`);
+  expect(parseTable(source, options)!.sections[0]!.rows[0]!.cells[0]!.value).toBe(value);
+});
+
 test("combined spans use one upward marker and genuine empty cells stay separate", () => {
   const table: WriteTable = {
     columns: [{ align: "left", wrap: true }, { align: "center" }, { align: "right" }],
