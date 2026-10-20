@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, test } from "vite-plus/test";
 import { runtime } from "../src/internal/backend.js";
 import { parseTable, TableScanner } from "../src/core.js";
 afterEach(() => runtime.disposeScanners());
@@ -40,19 +40,13 @@ test("single-line whitespace and ragged continuation segments preserve source", 
   expect(scanner.finished).toBe(false);
 
   const blockSource = "A|B\n-|-\n first | second |\\\n last |\n";
-  const block = parseTable(blockSource, { multiline: true })!.sections[1]!
-    .rows[0]!;
-  expect(block.cells.map((cell) => cell.value)).toEqual([
-    " first\n last",
-    " second",
-  ]);
+  const block = parseTable(blockSource, { multiline: true })!.sections[1]!.rows[0]!;
+  expect(block.cells.map((cell) => cell.value)).toEqual([" first\n last", " second"]);
   for (const cell of block.cells) {
     expect(cell.block).toBe(true);
-    expect(
-      cell.segments
-        .map(({ start, end }) => blockSource.slice(start, end))
-        .join("\n"),
-    ).toBe(cell.value);
+    expect(cell.segments.map(({ start, end }) => blockSource.slice(start, end)).join("\n")).toBe(
+      cell.value,
+    );
   }
 
   const mergedSource = "A|B\n-|-\nfirst|second\n\u2003^^\u00a0|\ufeff😀\u202f";

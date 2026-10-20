@@ -1,7 +1,6 @@
 node_modules/
 dist/
 *.tgz
-coverage/
 # 本地性能报告与验证产物，不作为 npm 包的一部分。
 .performance/
 crates/core/target/

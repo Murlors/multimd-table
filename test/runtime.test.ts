@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "vite-plus/test";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
@@ -44,13 +44,17 @@ test("scanner preserves safe host offsets, gaps, duplicate positions and snapsho
     try {
       for (let i = 0; i < lines.length; i++) {
         const accepted = scanner.push(lines[i]!, offsets[i]!);
-        expect(contractHash({ accepted, model: scanner.finish() })).toBe(golden.scanners[caseIndex]![i]!);
+        expect(contractHash({ accepted, model: scanner.finish() })).toBe(
+          golden.scanners[caseIndex]![i]!,
+        );
       }
       const first = scanner.finish()!;
       const expected = structuredClone(first);
       first.sections[0]!.rows[0]!.cells[0]!.segments[0]!.start = -1;
       expect(scanner.finish()).toEqual(expected);
-    } finally { scanner.dispose(); }
+    } finally {
+      scanner.dispose();
+    }
   }
 });
 
@@ -59,7 +63,8 @@ test("scanner applies changed options to later pushes and model snapshots", () =
   try {
     let offset = 0;
     for (const line of ["A|B", "-|-", "x||", "^^||"]) {
-      scanner.push(line, offset); offset += line.length + 1;
+      scanner.push(line, offset);
+      offset += line.length + 1;
     }
     for (const [index, rowspan] of [true, false, true].entries()) {
       scanner.options.rowspan = rowspan;
@@ -68,7 +73,9 @@ test("scanner applies changed options to later pushes and model snapshots", () =
     scanner.options.autolabel = false;
     const accepted = scanner.push("[Caption]", offset);
     expect(contractHash({ accepted, model: scanner.finish() })).toBe(golden.options[3]!);
-  } finally { scanner.dispose(); }
+  } finally {
+    scanner.dispose();
+  }
 });
 
 test("invalid offsets fail before acquiring native resources", () => {
@@ -85,14 +92,28 @@ test("all hosts release their own scanners on success, failed lookahead and exce
   protectedScanner.push("A|B", 0);
   protectedScanner.push("-|-", 4);
   const renderers = [
-    (source: string) => String(unified().use(remarkParse).use(remark, { multiline: true }).use(remarkRehype).use(rehypeStringify).processSync(source)),
+    (source: string) =>
+      String(
+        unified()
+          .use(remarkParse)
+          .use(remark, { multiline: true })
+          .use(remarkRehype)
+          .use(rehypeStringify)
+          .processSync(source),
+      ),
     (source: string) => new Marked(marked({ multiline: true })).parse(source, { async: false }),
     (source: string) => new MarkdownIt().use(markdownIt, { multiline: true }).render(source),
   ];
+  // oxlint-disable-next-line typescript/unbound-method -- 保存原型方法用于带 this 的生命周期探针。
   const push = TableScanner.prototype.push;
   try {
     for (const render of renderers) {
-      for (const source of ["A|B\n-|-\nx|y", "candidate|header\nmore|text\nplain", "> A|B\n> -|-\n> x|y", "A|B\n-|-\n|one|two|\\\n|three|four|"]) {
+      for (const source of [
+        "A|B\n-|-\nx|y",
+        "candidate|header\nmore|text\nplain",
+        "> A|B\n> -|-\n> x|y",
+        "A|B\n-|-\n|one|two|\\\n|three|four|",
+      ]) {
         expect(render(source)).toBeTruthy();
         expect(runtime.activeScanners()).toBe(1);
       }
@@ -106,6 +127,9 @@ test("all hosts release their own scanners on success, failed lookahead and exce
       expect(runtime.activeScanners()).toBe(1);
       expect(protectedScanner.finish()).not.toBeNull();
     }
-  } finally { TableScanner.prototype.push = push; protectedScanner.dispose(); }
+  } finally {
+    TableScanner.prototype.push = push;
+    protectedScanner.dispose();
+  }
   expect(runtime.activeScanners()).toBe(0);
 });

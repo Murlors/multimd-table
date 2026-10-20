@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "vite-plus/test";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
@@ -87,9 +87,10 @@ test("unsuccessful table lookahead preserves immediate block boundaries", () => 
 });
 test("blockquote tables, surrounding paragraphs, references and GFM cells", () => {
   const source = "before\n\n> A|B\n> -|-\n> ~~old~~|[link][x]\n\nafter\n\n[x]: https://example.com";
-  const expected = '<p>before</p><blockquote><table><thead><tr><th>A</th><th>B</th></tr></thead>' +
+  const expected =
+    "<p>before</p><blockquote><table><thead><tr><th>A</th><th>B</th></tr></thead>" +
     '<tbody><tr><td><del>old</del></td><td><a href="https://example.com">link</a></td></tr></tbody>' +
-    '</table></blockquote><p>after</p>';
+    "</table></blockquote><p>after</p>";
   expect(canonical(String(make().processSync(source)))).toEqual(canonical(expected));
 });
 test("ReactMarkdown renders native merged elements without raw HTML", () => {

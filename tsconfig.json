@@ -4,10 +4,10 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
-    "declaration": true,
-    "outDir": "dist",
-    "skipLibCheck": false,
+    "types": ["bun"],
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "tooling/**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts", "tooling/**/*.ts", "vite.config.ts"]
 }

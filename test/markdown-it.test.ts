@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "vite-plus/test";
 import MarkdownIt from "markdown-it";
 import { parseFragment, type DefaultTreeAdapterMap } from "parse5";
 import markdownItMultimdTable from "../src/markdown-it.js";
@@ -8,17 +8,10 @@ import { syntaxCases, optionCases } from "./cases.js";
 function normalize(html: string): unknown {
   const walk = (node: DefaultTreeAdapterMap["node"], pre = false): unknown => {
     if ("value" in node)
-      return pre
-        ? node.value
-        : node.value.trim()
-          ? node.value.replace(/\s+/g, " ").trim()
-          : null;
+      return pre ? node.value : node.value.trim() ? node.value.replace(/\s+/g, " ").trim() : null;
     return {
       tag: node.nodeName,
-      attrs:
-        "attrs" in node
-          ? [...node.attrs].sort((a, b) => a.name.localeCompare(b.name))
-          : [],
+      attrs: "attrs" in node ? [...node.attrs].sort((a, b) => a.name.localeCompare(b.name)) : [],
       children:
         "childNodes" in node
           ? node.childNodes
@@ -74,7 +67,9 @@ test("markdown-it renderer overrides and inline/core plugins receive native tabl
         if (child.type === "text") child.content = child.content.replace(/before/g, "after");
     }
   });
-  const html = md.render("[before [[custom]]]\nA|B\n-|-\n[[custom]]|before\n- [[custom]]|before|\\\n- **bold**|before|");
+  const html = md.render(
+    "[before [[custom]]]\nA|B\n-|-\n[[custom]]|before\n- [[custom]]|before|\\\n- **bold**|before|",
+  );
   expect(html.match(/<mark>custom<\/mark>/g)).toHaveLength(3);
   expect(html.match(/class="host-cell"/g)).toHaveLength(4);
   expect(html).not.toContain(">before");
@@ -84,7 +79,8 @@ test("markdown-it renderer overrides and inline/core plugins receive native tabl
 
 test("markdown-it references are resolved after the complete block pass, including cell definitions", () => {
   const md = new MarkdownIt().use(markdownItMultimdTable, { multiline: true });
-  const source = "A|B\n-|-\n|[late]|[cell]|\n|[cell]: /cell|[late]|\\\n| |[cell]|\n\nOutside [cell] [late]\n\n[late]: /later";
+  const source =
+    "A|B\n-|-\n|[late]|[cell]|\n|[cell]: /cell|[late]|\\\n| |[cell]|\n\nOutside [cell] [late]\n\n[late]: /later";
   const html = md.render(source);
   expect(html.match(/href="\/cell"/g)).toHaveLength(3);
   expect(html.match(/href="\/later"/g)).toHaveLength(3);
@@ -110,8 +106,9 @@ test("markdown-it preserves table rule toggles in CommonMark and default presets
   expect(commonmark.render(source)).toBe(new MarkdownIt("commonmark").render(source));
   expect(commonmark.enable("table").render(source)).toContain('rowspan="2"');
   expect(commonmark.disable("table").render(source)).not.toContain("<table>");
-  expect(new MarkdownIt().disable("table").use(markdownItMultimdTable).render(source))
-    .not.toContain("<table>");
+  expect(
+    new MarkdownIt().disable("table").use(markdownItMultimdTable).render(source),
+  ).not.toContain("<table>");
 });
 
 test("markdown-it malformed lookahead and outer fenced/code blocks retain host behavior", () => {
@@ -126,28 +123,35 @@ test("markdown-it malformed lookahead and outer fenced/code blocks retain host b
     "    A|B\n    -|-\n    x|y",
     "\tA|B\n\t-|-\n\tx|y",
     "plain|literal\n",
-  ]) expect(md.render(source)).toBe(base.render(source));
+  ])
+    expect(md.render(source)).toBe(base.render(source));
   const source = "A|B\n-|-\nx|y\n```md\noutside|pipe\n```\n\n# Heading";
   expect(md.render(source)).toContain('<pre><code class="language-md">outside|pipe\n</code></pre>');
   expect(md.render(source)).toContain("<h1>Heading</h1>");
 });
 
 test("markdown-it container boundaries and Tab expansion preserve cells and source maps", () => {
-  const source = "before\n\n> - list\n>\n>   [title]\n>   A|B\n>   -|-\n>   - one|first|\\\n>   - two|second|\n>\n>   x|y\n\nafter";
+  const source =
+    "before\n\n> - list\n>\n>   [title]\n>   A|B\n>   -|-\n>   - one|first|\\\n>   - two|second|\n>\n>   x|y\n\nafter";
   const md = new MarkdownIt().use(markdownItMultimdTable, { multiline: true });
-  expect(normalize(md.render(source))).toEqual(normalize(
-    '<p>before</p><blockquote><ul><li><p>list</p><table><caption id="title">title</caption>' +
-    '<thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td><ul><li>one</li><li>two</li></ul></td>' +
-    '<td><p>first\nsecond</p></td></tr></tbody><tbody><tr><td>x</td><td>y</td></tr></tbody>' +
-    '</table></li></ul></blockquote><p>after</p>',
-  ));
+  expect(normalize(md.render(source))).toEqual(
+    normalize(
+      '<p>before</p><blockquote><ul><li><p>list</p><table><caption id="title">title</caption>' +
+        "<thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td><ul><li>one</li><li>two</li></ul></td>" +
+        "<td><p>first\nsecond</p></td></tr></tbody><tbody><tr><td>x</td><td>y</td></tr></tbody>" +
+        "</table></li></ul></blockquote><p>after</p>",
+    ),
+  );
   const tokens = md.parse(source, {});
   expect(tokens.find((token) => token.type === "table_open")?.map).toEqual([4, 11]);
   expect(tokens.find((token) => token.type === "caption_open")?.map).toEqual([4, 5]);
-  expect(tokens.filter((token) => token.type === "tbody_open").map((token) => token.map))
-    .toEqual([[7, 9], [10, 11]]);
-  expect(tokens.find((token) => token.type === "inline" && token.content === "one")?.map)
-    .toEqual([7, 8]);
+  expect(tokens.filter((token) => token.type === "tbody_open").map((token) => token.map)).toEqual([
+    [7, 9],
+    [10, 11],
+  ]);
+  expect(tokens.find((token) => token.type === "inline" && token.content === "one")?.map).toEqual([
+    7, 8,
+  ]);
   let level = 0;
   for (const token of tokens) {
     if (token.nesting === -1) level--;
@@ -190,23 +194,21 @@ test("markdown-it preserves Tab code indentation at the start of a candidate tab
     ">   \tA|B\n> -|-\n> x|y",
     "- item\n\n  \t\tA|B\n  -|-\n  x|y",
     "> - item\n>\n>     \tA|B\n>   -|-\n>   x|y",
-  ]) expect(md.render(source)).toBe(base.render(source));
+  ])
+    expect(md.render(source)).toBe(base.render(source));
   expect(md.render("    A|B\n-|-\nx|y")).toContain("<table>");
   expect(md.render("A|B\n    C|D\n-|-\nx|y")).toContain("<table>");
-  expect(md.render("-   item\n\n\t    A|B\n\t-|-\n\tx|y"))
-    .toContain("<table>");
+  expect(md.render("-   item\n\n\t    A|B\n\t-|-\n\tx|y")).toContain("<table>");
   const multiline = new MarkdownIt().use(markdownItMultimdTable, { multiline: true });
-  for (const source of [
-    "A|B|\\\n\tC|D|\n-|-\nx|y",
-    "\tcode|note|\\\n\tmore|rest|\n-|-\nx|y",
-  ]) {
+  for (const source of ["A|B|\\\n\tC|D|\n-|-\nx|y", "\tcode|note|\\\n\tmore|rest|\n-|-\nx|y"]) {
     const html = multiline.render(source);
     expect(html).toContain("<table>");
     expect(html).toContain("<th>");
     expect(html).not.toContain("\\");
   }
-  expect(multiline.render("\tcode|note|\\\n\tmore|rest|\n-|-\nx|y"))
-    .toContain("<pre><code>code\nmore\n</code></pre>");
+  expect(multiline.render("\tcode|note|\\\n\tmore|rest|\n-|-\nx|y")).toContain(
+    "<pre><code>code\nmore\n</code></pre>",
+  );
 });
 
 test("markdown-it leaves pipe-bearing fenced and HTML openers with their host rules", () => {
@@ -220,15 +222,17 @@ test("markdown-it leaves pipe-bearing fenced and HTML openers with their host ru
     "<div>header|pipe\nA|B\n-|-\nx|y\n</div>",
   ]) {
     expect(md.render(source)).toBe(base.render(source));
-    expect(md.parse(source, {}).some((token) => token.type === "table_open"))
-      .toBe(false);
+    expect(md.parse(source, {}).some((token) => token.type === "table_open")).toBe(false);
   }
   for (const header of ["# heading", "- list"])
-    expect(normalize(md.render(`${header}|B\n-|-\nx|y`))).toEqual(normalize(
-      `<table><thead><tr><th>${header}</th><th>B</th></tr></thead><tbody><tr><td>x</td><td>y</td></tr></tbody></table>`,
-    ));
-  expect(new MarkdownIt().use(markdownItMultimdTable)
-    .render("<div>header|pipe\n-|-\nx|y")).toContain("<table>");
+    expect(normalize(md.render(`${header}|B\n-|-\nx|y`))).toEqual(
+      normalize(
+        `<table><thead><tr><th>${header}</th><th>B</th></tr></thead><tbody><tr><td>x</td><td>y</td></tr></tbody></table>`,
+      ),
+    );
+  expect(
+    new MarkdownIt().use(markdownItMultimdTable).render("<div>header|pipe\n-|-\nx|y"),
+  ).toContain("<table>");
 });
 
 test("markdown-it silent recognition is side-effect free and respects endLine", () => {

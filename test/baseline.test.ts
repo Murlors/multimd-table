@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { afterEach, test } from "bun:test";
+import { afterEach, test } from "vite-plus/test";
 import { runtime } from "../src/internal/backend.js";
 import { cellBounds, parseTable, TableScanner, type Range, type Table } from "../src/core.js";
 import { fixtures } from "../tooling/performance/corpus.js";
@@ -9,7 +9,10 @@ afterEach(() => runtime.disposeScanners());
 function referenceBounds(source: string): number[] {
   const pipes: number[] = [];
   for (let i = 0; i < source.length; i++) {
-    if (source[i] === "\\") { i++; continue; }
+    if (source[i] === "\\") {
+      i++;
+      continue;
+    }
     if (source[i] === "`") {
       let end = i;
       while (source[end] === "`") end++;
@@ -19,7 +22,11 @@ function referenceBounds(source: string): number[] {
         if (source[j] !== "`") continue;
         let next = j;
         while (source[next] === "`") next++;
-        if (next - j === size) { i = next - 1; closed = true; break; }
+        if (next - j === size) {
+          i = next - 1;
+          closed = true;
+          break;
+        }
         j = next - 1;
       }
       if (!closed) i = end - 1;
@@ -51,7 +58,10 @@ function sourceContract(source: string, table: Table) {
   if (table.caption) {
     inside(table.caption.range, table.range);
     inside(table.caption.contentRange, table.caption.range);
-    assert.equal(source.slice(table.caption.contentRange.start, table.caption.contentRange.end), table.caption.value);
+    assert.equal(
+      source.slice(table.caption.contentRange.start, table.caption.contentRange.end),
+      table.caption.value,
+    );
   }
   for (const section of table.sections) {
     inside(section.range, table.range);
@@ -59,8 +69,11 @@ function sourceContract(source: string, table: Table) {
       inside(row.range, section.range);
       for (const cell of row.cells) {
         inside(cell.range, row.range);
-        cell.segments.forEach(segment => inside(segment, cell.range));
-        assert.equal(cell.segments.map(({ start, end }) => source.slice(start, end)).join("\n"), cell.value);
+        cell.segments.forEach((segment) => inside(segment, cell.range));
+        assert.equal(
+          cell.segments.map(({ start, end }) => source.slice(start, end)).join("\n"),
+          cell.value,
+        );
       }
     }
   }
@@ -76,17 +89,33 @@ test("baseline: exhaustive pipe, slash and tick combinations through length 8", 
 
 test("baseline: seeded Unicode, whitespace and long delimiter runs (seed 0x51a7)", () => {
   const next = random(0x51a7);
-  const parts = ["a", "|", "`", "\\", " ", "\t", "😀", "\ud800", "\u00a0", "`".repeat(17), "\\".repeat(16)];
+  const parts = [
+    "a",
+    "|",
+    "`",
+    "\\",
+    " ",
+    "\t",
+    "😀",
+    "\ud800",
+    "\u00a0",
+    "`".repeat(17),
+    "\\".repeat(16),
+  ];
   for (let sample = 0; sample < 3000; sample++) {
     const source = Array.from({ length: next(64) }, () => parts[next(parts.length)]!).join("");
-    assert.deepEqual(cellBounds(source), referenceBounds(source), `seed=0x51a7 sample=${sample} source=${JSON.stringify(source)}`);
+    assert.deepEqual(
+      cellBounds(source),
+      referenceBounds(source),
+      `seed=0x51a7 sample=${sample} source=${JSON.stringify(source)}`,
+    );
   }
 });
 
 for (const fixture of fixtures) {
   test(`baseline corpus: ${fixture.id}`, () => {
     const table = parseTable(fixture.source, fixture.options);
-    assert.deepEqual(table?.sections.map(section => section.rows.length) ?? null, fixture.rows);
+    assert.deepEqual(table?.sections.map((section) => section.rows.length) ?? null, fixture.rows);
     if (table) {
       assert.equal(table.range.end, fixture.source.length);
       sourceContract(fixture.source, table);
@@ -96,10 +125,29 @@ for (const fixture of fixtures) {
 
 test("baseline: seeded malformed documents preserve ranges and scanner snapshots (seed 0xc0ffee)", () => {
   const next = random(0xc0ffee);
-  const lines = ["A|B", "-|-", "|", "", "plain", "^^|^^", "x||", "| x | y |\\", "`a|b`|😀", "[caption]", "  a|b", "\\|x|y"];
+  const lines = [
+    "A|B",
+    "-|-",
+    "|",
+    "",
+    "plain",
+    "^^|^^",
+    "x||",
+    "| x | y |\\",
+    "`a|b`|😀",
+    "[caption]",
+    "  a|b",
+    "\\|x|y",
+  ];
   const endings = ["\n", "\r\n", "\r"];
   for (let sample = 0; sample < 1000; sample++) {
-    const options = { multiline: !!(sample & 1), rowspan: !!(sample & 2), headerless: !!(sample & 4), multibody: !!(sample & 8), autolabel: !!(sample & 16) };
+    const options = {
+      multiline: !!(sample & 1),
+      rowspan: !!(sample & 2),
+      headerless: !!(sample & 4),
+      multibody: !!(sample & 8),
+      autolabel: !!(sample & 16),
+    };
     let source = sample % 2 ? "A|B\n-|-\n" : "";
     for (let i = next(16); i > 0; i--) source += lines[next(lines.length)]! + endings[next(3)]!;
     try {
@@ -111,14 +159,20 @@ test("baseline: seeded malformed documents preserve ranges and scanner snapshots
         const snapshot = structuredClone(before);
         const accepted = scanner.push(match[1]!, match.index);
         assert.deepEqual(before, snapshot);
-        if (!accepted) { assert.deepEqual(scanner.finish(), before); break; }
+        if (!accepted) {
+          assert.deepEqual(scanner.finish(), before);
+          break;
+        }
         if (scanner.finished) break;
       }
       const table = parseTable(source, options);
       assert.deepEqual(scanner.finish(), table);
       if (table) sourceContract(source, table);
     } catch (error) {
-      throw new Error(`seed=0xc0ffee sample=${sample} options=${JSON.stringify(options)} source=${JSON.stringify(source)}`, { cause: error });
+      throw new Error(
+        `seed=0xc0ffee sample=${sample} options=${JSON.stringify(options)} source=${JSON.stringify(source)}`,
+        { cause: error },
+      );
     }
   }
 });

@@ -18,37 +18,69 @@ for (let i = 0; i < 500; i++) {
 export const fixtures: Fixture[] = [
   ...[10, 1000, 5000].map((size): Fixture => ({
     id: `plain-${size}`,
-    source: ["A|B|C|D", "-|-|-|-", ...Array.from({ length: size }, (_, i) => `row ${i}|value|code|${i}`)].join("\n"),
-    options: {}, rows: [1, size],
+    source: [
+      "A|B|C|D",
+      "-|-|-|-",
+      ...Array.from({ length: size }, (_, i) => `row ${i}|value|code|${i}`),
+    ].join("\n"),
+    options: {},
+    rows: [1, size],
   })),
   {
     id: "rich-1000",
-    source: ["[**Sales**][sales]", "Region|Team|Sales||", "^^|^^|Q1|Q2", ":-|:-|-:|-:+", ...richRows].join("\n"),
-    options: { rowspan: true }, rows: [2, 250, 250, 250, 250],
+    source: [
+      "[**Sales**][sales]",
+      "Region|Team|Sales||",
+      "^^|^^|Q1|Q2",
+      ":-|:-|-:|-:+",
+      ...richRows,
+    ].join("\n"),
+    options: { rowspan: true },
+    rows: [2, 250, 250, 250, 250],
   },
   {
     id: "multiline-500",
-    source: ["A|B", "-|-", ...Array.from({ length: 500 }, (_, i) => `| step ${i} | - first |\\\n| next | - last |`)].join("\n"),
-    options: { multiline: true }, rows: [1, 500],
+    source: [
+      "A|B",
+      "-|-",
+      ...Array.from({ length: 500 }, (_, i) => `| step ${i} | - first |\\\n| next | - last |`),
+    ].join("\n"),
+    options: { multiline: true },
+    rows: [1, 500],
   },
   {
     id: "escaped-1000",
-    source: ["A|B|C|D", "-|-|-|-", ...Array.from({ length: 1000 }, () => "left\\|right|``a`|b``|😀|tail\\\\")].join("\n"),
-    options: {}, rows: [1, 1000],
+    source: [
+      "A|B|C|D",
+      "-|-|-|-",
+      ...Array.from({ length: 1000 }, () => "left\\|right|``a`|b``|😀|tail\\\\"),
+    ].join("\n"),
+    options: {},
+    rows: [1, 1000],
   },
   {
     id: "wide-128",
-    source: [Array(128).fill("H").join("|"), Array(128).fill("---").join("|"), ...Array.from({ length: 100 }, () => Array(128).fill("x").join("|"))].join("\n"),
-    options: {}, rows: [1, 100],
+    source: [
+      Array(128).fill("H").join("|"),
+      Array(128).fill("---").join("|"),
+      ...Array.from({ length: 100 }, () => Array(128).fill("x").join("|")),
+    ].join("\n"),
+    options: {},
+    rows: [1, 100],
   },
   {
     id: "unmatched-ticks",
-    source: "A|B\n-|-\n" + Array.from({ length: 128 }, (_, i) => "`".repeat(i + 1) + "x").join("") + "|tail",
-    options: {}, rows: [1, 1],
+    source:
+      "A|B\n-|-\n" +
+      Array.from({ length: 128 }, (_, i) => "`".repeat(i + 1) + "x").join("") +
+      "|tail",
+    options: {},
+    rows: [1, 1],
   },
   {
     id: "invalid-5000",
     source: Array(5000).fill("candidate|without delimiter").join("\n"),
-    options: {}, rows: null,
+    options: {},
+    rows: null,
   },
 ];

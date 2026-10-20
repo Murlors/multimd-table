@@ -13,29 +13,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: voidzero-dev/setup-vp@v1.21.2
         with:
-          bun-version: 1.4.3
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - run: bun install --frozen-lockfile
+          node-version: lts
+          cache: true
+          run-install: |
+            args: ["--frozen-lockfile"]
       - run: rustup target add wasm32-unknown-unknown
-      - run: bun run check
-      - run: bun run check:package
+      - run: vp run verify
   performance:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: voidzero-dev/setup-vp@v1.21.2
         with:
-          bun-version: 1.4.3
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - run: bun install --frozen-lockfile
+          node-version: lts
+          cache: true
+          run-install: |
+            args: ["--frozen-lockfile"]
       - run: rustup target add wasm32-unknown-unknown
-      - run: bun run bench --quick --out .performance/ci
+      - run: vp run bench --quick --out .performance/ci
       - uses: actions/upload-artifact@v4
         with:
           name: performance-${{ github.sha }}

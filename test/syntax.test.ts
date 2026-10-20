@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, test } from "vite-plus/test";
 import { cellBounds, parseTable, expandSection, TableScanner } from "../src/core.js";
 import { runtime } from "../src/internal/backend.js";
 afterEach(() => runtime.disposeScanners());
@@ -16,24 +16,33 @@ test("pipe scanning distinguishes escape parity, matched tick runs and literal t
     ["\\`name|value`", ["\\`name", "value`"]],
     ["\\``part|text`|tail", ["\\``part|text`", "tail"]],
     ["\\```part|text``|tail", ["\\```part|text``", "tail"]],
-    ["`unclosed|``a ```inner``|```b|c```|tail", ["`unclosed", "``a ```inner``", "```b|c```", "tail"]],
+    [
+      "`unclosed|``a ```inner``|```b|c```|tail",
+      ["`unclosed", "``a ```inner``", "```b|c```", "tail"],
+    ],
   ];
   for (const [source, expected] of values) {
     const bounds = cellBounds(source);
-    expect(bounds.slice(1).map((end, index) => source.slice(bounds[index]! + 1, end)))
-      .toEqual(expected);
+    expect(bounds.slice(1).map((end, index) => source.slice(bounds[index]! + 1, end))).toEqual(
+      expected,
+    );
   }
   expect(cellBounds("`one|two`")).toEqual([]);
   expect(cellBounds("literal\\|pipe")).toEqual([]);
 });
 
 test("all model ranges remain independent and point into multiline Unicode source", () => {
-  const source = "[**清单**][List-7]\r\n|Category|Count|\r\n|:---|---:+|\r\n|青瓷😀|one|\\\r\n|碗|two|\r\n|^^|next|";
+  const source =
+    "[**清单**][List-7]\r\n|Category|Count|\r\n|:---|---:+|\r\n|青瓷😀|one|\\\r\n|碗|two|\r\n|^^|next|";
   const table = parseTable(source, { multiline: true, rowspan: true })!;
   expect(table.caption).toMatchObject({ id: "list7", value: "**清单**", side: "top" });
-  expect(source.slice(table.caption!.contentRange.start, table.caption!.contentRange.end))
-    .toBe("**清单**");
-  expect(table.columns).toEqual([{ align: "left", wrap: false }, { align: "right", wrap: true }]);
+  expect(source.slice(table.caption!.contentRange.start, table.caption!.contentRange.end)).toBe(
+    "**清单**",
+  );
+  expect(table.columns).toEqual([
+    { align: "left", wrap: false },
+    { align: "right", wrap: true },
+  ]);
   const body = table.sections[1]!;
   expect(body.rows).toHaveLength(2);
   expect(body.rows[0]!.cells[0]).toMatchObject({ value: "青瓷😀\n碗", rowspan: 2, block: true });
@@ -41,14 +50,21 @@ test("all model ranges remain independent and point into multiline Unicode sourc
   for (const section of table.sections)
     for (const row of section.rows)
       for (const cell of row.cells)
-        expect(cell.segments.map(({ start, end }) => source.slice(start, end)).join("\n"))
-          .toBe(cell.value);
+        expect(cell.segments.map(({ start, end }) => source.slice(start, end)).join("\n")).toBe(
+          cell.value,
+        );
 });
 
 test("captions balance nested links and reject partial or empty bracket lines", () => {
   const table = parseTable("[[catalog](/shop) and \\[note\\]]\nItem|Count\n-|-\nCup|2")!;
   expect(table.caption!.value).toBe("[catalog](/shop) and \\[note\\]");
-  for (const value of ["Use `[` here", "Use `]` here", "Use ``[`]`` here", "Use \\``[` here", "`unclosed ``a ```inner`` ```]```"])
+  for (const value of [
+    "Use `[` here",
+    "Use `]` here",
+    "Use ``[`]`` here",
+    "Use \\``[` here",
+    "`unclosed ``a ```inner`` ```]```",
+  ])
     expect(parseTable(`[${value}]\nItem|Count\n-|-\nCup|2`)!.caption!.value).toBe(value);
   for (const prefix of ["[]", "[unfinished", "[label] extra"])
     expect(parseTable(`${prefix}\nItem|Count\n-|-\nCup|2`)).toBeNull();
@@ -57,14 +73,22 @@ test("captions balance nested links and reject partial or empty bracket lines", 
 test("unfinished continuations fall back at a header delimiter and at EOF without markers", () => {
   const source = "Item|Qty|\\\n---|---|\nCup|2|\\\nPlate|4|\\";
   const table = parseTable(source, { multiline: true })!;
-  expect(table.sections.map(section => section.rows.map(row => row.cells.map(cell => cell.value))))
-    .toEqual([[["Item", "Qty"]], [["Cup", "2"], ["Plate", "4"]]]);
+  expect(
+    table.sections.map((section) => section.rows.map((row) => row.cells.map((cell) => cell.value))),
+  ).toEqual([
+    [["Item", "Qty"]],
+    [
+      ["Cup", "2"],
+      ["Plate", "4"],
+    ],
+  ]);
   for (const section of table.sections)
     for (const row of section.rows)
       for (const cell of row.cells) {
         expect(cell.block).toBe(false);
-        expect(cell.segments.map(({ start, end }) => source.slice(start, end)).join("\n"))
-          .toBe(cell.value);
+        expect(cell.segments.map(({ start, end }) => source.slice(start, end)).join("\n")).toBe(
+          cell.value,
+        );
       }
 });
 
@@ -84,8 +108,9 @@ test("a bare outer pipe does not count as table content or mutate scanner state"
 test("section gaps and trailing blank input do not expand the consumed table range", () => {
   const source = "Item|Count\n-|-\nCup|2";
   expect(parseTable(source + "\n\n\nOutside")!.range.end).toBe(source.length);
-  expect(parseTable("Item|Count\n-|-\n\nCup|2")!.sections.map(({ kind }) => kind))
-    .toEqual(["head"]);
+  expect(parseTable("Item|Count\n-|-\n\nCup|2")!.sections.map(({ kind }) => kind)).toEqual([
+    "head",
+  ]);
   const scanner = new TableScanner({ headerless: true });
   expect(scanner.push("-|-", 0)).toBe(true);
   expect(scanner.finish()).toBeNull();
@@ -100,14 +125,21 @@ test("continued markers extend one source cell once per logical row", () => {
   expect(body.rows[0]!.cells[0]).toMatchObject({ colspan: 2, rowspan: 3 });
   expect(body.rows[1]!.cells).toEqual([]);
   expect(body.rows[2]!.cells).toEqual([]);
-  expect(expandSection(body).flat().every((cell) => cell?.value === "shared")).toBe(true);
+  expect(
+    expandSection(body)
+      .flat()
+      .every((cell) => cell?.value === "shared"),
+  ).toBe(true);
 });
 
 test("row spans do not cross uncovered columns in shorter rows", () => {
   const table = parseTable("A|B|C\n-|-|-\na|b|c\n||fresh\n^^|^^|^^", { rowspan: true })!;
   const body = table.sections[1]!;
-  expect(body.rows[0]!.cells.map(cell => cell.rowspan)).toEqual([1, 1, 1]);
+  expect(body.rows[0]!.cells.map((cell) => cell.rowspan)).toEqual([1, 1, 1]);
   expect(body.rows[1]!.cells[0]).toMatchObject({ column: 1, value: "fresh", rowspan: 2 });
-  expect(body.rows[2]!.cells.map(cell => [cell.column, cell.value])).toEqual([[0, "^^"], [2, "^^"]]);
-  expect(expandSection(body)[2]!.map(cell => cell?.value)).toEqual(["^^", "fresh", "^^"]);
+  expect(body.rows[2]!.cells.map((cell) => [cell.column, cell.value])).toEqual([
+    [0, "^^"],
+    [2, "^^"],
+  ]);
+  expect(expandSection(body)[2]!.map((cell) => cell?.value)).toEqual(["^^", "fresh", "^^"]);
 });

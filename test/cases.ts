@@ -104,7 +104,8 @@ export const syntaxCases: { name: string; source: string; html: string; options?
 /** 独立表达五个开关的交互结果，用于三个宿主的同一组契约测试。 */
 export function optionCases(options: Required<Options>) {
   const caption = `<caption${options.autolabel ? ' id="stock"' : ""}><strong>Stock</strong></caption>`;
-  const head = '<thead><tr><th style="text-align:left">Zone</th><th style="text-align:right" class="extend">Count</th></tr></thead>';
+  const head =
+    '<thead><tr><th style="text-align:left">Zone</th><th style="text-align:right" class="extend">Count</th></tr></thead>';
   const marker = options.rowspan ? "" : '<td style="text-align:left">^^</td>';
   const first = `<tbody><tr><td style="text-align:left"${options.rowspan ? ' rowspan="2"' : ""}>North</td><td style="text-align:right" class="extend">2</td></tr><tr>${marker}<td style="text-align:right" class="extend">3</td></tr></tbody>`;
   const last = options.multibody
@@ -123,7 +124,8 @@ export function optionCases(options: Required<Options>) {
     },
     {
       source: "Step|Note\n-|-\nfirst|alpha\\\nsecond|beta",
-      html: "<table><thead><tr><th>Step</th><th>Note</th></tr></thead><tbody>" +
+      html:
+        "<table><thead><tr><th>Step</th><th>Note</th></tr></thead><tbody>" +
         (options.multiline
           ? "<tr><td><p>first\nsecond</p></td><td><p>alpha\nbeta</p></td></tr>"
           : "<tr><td>first</td><td>alpha\\</td></tr><tr><td>second</td><td>beta</td></tr>") +

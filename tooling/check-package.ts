@@ -4,6 +4,7 @@ import { cp, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/p
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { build } from "vite-plus";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const temporary = await mkdtemp(join(tmpdir(), "multimd-package-"));
@@ -32,7 +33,8 @@ function run(command: string[], cwd: string): string {
 
 /** 从本地已验证工具链读取精确版本，消费者安装不链接开发仓库的 node_modules。 */
 async function version(name: string): Promise<string> {
-  return JSON.parse(await readFile(join(root, "node_modules", name, "package.json"), "utf8")).version;
+  return JSON.parse(await readFile(join(root, "node_modules", name, "package.json"), "utf8"))
+    .version;
 }
 
 async function json(path: string, value: unknown) {
@@ -232,18 +234,49 @@ const consumers = {
   core: { runtime: coreProbe + lifecycleProbe, types: coreTypes, dependencies: [] },
   writer: { runtime: writerProbe, types: writerTypes, dependencies: [] },
   remark: {
-    runtime: remarkProbe, types: remarkTypes,
-    dependencies: ["unified", "mdast-util-from-markdown", "remark-parse", "remark-gfm", "remark-rehype", "rehype-stringify"],
+    runtime: remarkProbe,
+    types: remarkTypes,
+    dependencies: [
+      "unified",
+      "mdast-util-from-markdown",
+      "remark-parse",
+      "remark-gfm",
+      "remark-rehype",
+      "rehype-stringify",
+    ],
   },
   marked: { runtime: markedProbe, types: markedTypes, dependencies: ["marked"] },
-  "markdown-it": { runtime: markdownItProbe, types: markdownItTypes, dependencies: ["markdown-it"] },
+  "markdown-it": {
+    runtime: markdownItProbe,
+    types: markdownItTypes,
+    dependencies: ["markdown-it"],
+  },
   mdx: {
-    runtime: mdxProbe, types: mdxTypes,
-    dependencies: ["@mdx-js/mdx", "react", "react-dom", "@types/react", "@types/react-dom", "remark-gfm", "unified", "mdast-util-from-markdown"],
+    runtime: mdxProbe,
+    types: mdxTypes,
+    dependencies: [
+      "@mdx-js/mdx",
+      "react",
+      "react-dom",
+      "@types/react",
+      "@types/react-dom",
+      "remark-gfm",
+      "unified",
+      "mdast-util-from-markdown",
+    ],
   },
   browser: {
-    runtime: coreProbe, types: coreTypes,
-    dependencies: ["unified", "mdast-util-from-markdown", "remark-parse", "remark-rehype", "rehype-stringify", "marked", "markdown-it"],
+    runtime: coreProbe,
+    types: coreTypes,
+    dependencies: [
+      "unified",
+      "mdast-util-from-markdown",
+      "remark-parse",
+      "remark-rehype",
+      "rehype-stringify",
+      "marked",
+      "markdown-it",
+    ],
   },
 } as const;
 
@@ -254,9 +287,16 @@ try {
   const entries = run(["tar", "-tzf", archive], root).trim().split("\n");
   const files = new Set(entries.filter((entry) => !entry.endsWith("/")));
   for (const entry of entries) {
-    assert.ok(!entry.startsWith("/") && !entry.split("/").includes(".."), `Unsafe archive path: ${entry}`);
+    assert.ok(
+      !entry.startsWith("/") && !entry.split("/").includes(".."),
+      `Unsafe archive path: ${entry}`,
+    );
     if (entry.endsWith("/")) {
-      assert.match(entry, /^package\/(?:dist\/(?:internal\/)?)?$/, `Unexpected archive directory: ${entry}`);
+      assert.match(
+        entry,
+        /^package\/(?:dist\/(?:internal\/)?)?$/,
+        `Unexpected archive directory: ${entry}`,
+      );
       continue;
     }
     assert.match(
@@ -267,7 +307,10 @@ try {
     const content = run(["tar", "-xOzf", archive, entry], root);
     // 旧构建目录即使残留 map，也不能入包；发布的 JS 和声明同样不能引用它们。
     if (entry.startsWith("package/dist/")) {
-      assert.ok(!/\/\/# sourceMappingURL=/.test(content), `Unexpected source map reference: ${entry}`);
+      assert.ok(
+        !/\/\/# sourceMappingURL=/.test(content),
+        `Unexpected source map reference: ${entry}`,
+      );
     }
   }
   const required = [
@@ -290,8 +333,14 @@ try {
     "package/dist/internal/wire.mjs",
     "package/dist/internal/wasm-data.js",
   ];
-  assert.deepEqual([...files].sort(), required.sort(), "Published files must match the package entries");
-  console.log(`[package] archive contents passed without source maps or TS sources (${files.size} files)`);
+  assert.deepEqual(
+    [...files].sort(),
+    required.sort(),
+    "Published files must match the package entries",
+  );
+  console.log(
+    `[package] archive contents passed without source maps or TS sources (${files.size} files)`,
+  );
 
   for (const [kind, probe] of Object.entries(consumers)) {
     const directory = join(temporary, kind);
@@ -308,14 +357,7 @@ try {
       dependencies,
     });
     run(
-      [
-        bun,
-        "install",
-        "--ignore-scripts",
-        "--prefer-offline",
-        "--no-progress",
-        "--omit=peer",
-      ],
+      [bun, "install", "--ignore-scripts", "--prefer-offline", "--no-progress", "--omit=peer"],
       directory,
     );
     const installed = await realpath(join(directory, "node_modules/multimd-table"));
@@ -323,8 +365,9 @@ try {
       installed.startsWith((await realpath(directory)) + "/"),
       "Package must resolve inside the isolated consumer",
     );
-    const unusedPeers = ["unified", "mdast-util-from-markdown", "marked", "markdown-it"]
-      .filter((name) => !(name in dependencies));
+    const unusedPeers = ["unified", "mdast-util-from-markdown", "marked", "markdown-it"].filter(
+      (name) => !(name in dependencies),
+    );
     const isolation = `\nfor (const name of ${JSON.stringify(unusedPeers)}) {
       assert.throws(() => import.meta.resolve(name), undefined, name + " must remain absent");
     }\n`;
@@ -345,16 +388,22 @@ try {
     });
     run([bun, "--no-install", "runtime.mjs"], directory);
     run(["node", "runtime.mjs"], directory);
-    run([bun, join(directory, "node_modules/typescript/bin/tsc"), "-p", "tsconfig.json"], directory);
+    run(
+      [bun, join(directory, "node_modules/typescript/bin/tsc"), "-p", "tsconfig.json"],
+      directory,
+    );
     console.log(`[package] ${kind}: clean install, Bun, Node and TypeScript passed`);
     if (kind === "core") {
-      await writeFile(join(directory, "startup.mjs"), String.raw`
+      await writeFile(
+        join(directory, "startup.mjs"),
+        String.raw`
 const start = performance.now();
 const { parseTable } = await import("multimd-table");
 const initializationMs = performance.now() - start;
 if (!parseTable("A|B\n-|-\nx|y")) throw new Error("First parse failed");
 console.log(JSON.stringify({ initializationMs, version: process.versions.bun ?? process.versions.node }));
-`);
+`,
+      );
       for (const engine of [bun, "node"]) {
         const name = engine === bun ? "Bun" : "Node";
         firstImports[name] = JSON.parse(run([engine, "startup.mjs"], directory));
@@ -364,16 +413,33 @@ console.log(JSON.stringify({ initializationMs, version: process.versions.bun ?? 
     if (kind === "browser") {
       const output = join(root, ".performance/package-browser");
       await mkdir(output, { recursive: true });
-      for (const name of ["browser.mjs", "worker.mjs"]) await cp(join(root, "test/package", name), join(directory, name));
-      const results = await Promise.all([false, true].map(worker => Bun.build({
-        entrypoints: [join(directory, worker ? "worker.mjs" : "browser.mjs")],
-        outdir: output, target: "browser", minify: true,
-        // micromark 的实体解码器为 Worker 提供无 document 的条件导出。
-        conditions: worker ? ["worker"] : ["browser"],
-      })));
-      for (const result of results) if (!result.success) throw new AggregateError(result.logs, "Packed browser build failed");
+      for (const name of ["browser.mjs", "worker.mjs"])
+        await cp(join(root, "test/package", name), join(directory, name));
+      for (const worker of [false, true]) {
+        await build({
+          configFile: false,
+          root: directory,
+          // micromark 的实体解码器为 Worker 提供无 document 的条件导出。
+          resolve: {
+            conditions: worker
+              ? ["worker", "module", "production"]
+              : ["browser", "module", "production"],
+          },
+          build: {
+            outDir: output,
+            emptyOutDir: false,
+            minify: true,
+            lib: {
+              entry: join(directory, worker ? "worker.mjs" : "browser.mjs"),
+              formats: ["es"],
+              fileName: () => (worker ? "worker.js" : "browser.js"),
+            },
+          },
+        });
+      }
       await cp(join(installed, "dist"), join(output, "package/dist"), { recursive: true });
-      for (const name of ["index.html", "main.mjs"]) await cp(join(root, "test/package", name), join(output, name));
+      for (const name of ["index.html", "main.mjs"])
+        await cp(join(root, "test/package", name), join(output, name));
       console.log(`[package] browser bundles and unbundled package copied to ${output}`);
     }
   }
@@ -382,7 +448,10 @@ console.log(JSON.stringify({ initializationMs, version: process.versions.bun ?? 
   await cp(archive, join(acceptance, "package.tgz"));
   const bytes = await readFile(archive);
   await json(join(acceptance, "report.json"), {
-    createdAt: new Date().toISOString(), files: [...files].sort(), consumers: Object.keys(consumers), firstImports,
+    createdAt: new Date().toISOString(),
+    files: [...files].sort(),
+    consumers: Object.keys(consumers),
+    firstImports,
     archive: { bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") },
   });
 } finally {

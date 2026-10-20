@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test } from "vite-plus/test";
 import { compile, createProcessor, evaluate, run, type CompileOptions } from "@mdx-js/mdx";
 import React, { type ComponentProps, type JSX as ReactJSX } from "react";
 import * as runtime from "react/jsx-runtime";
@@ -123,10 +123,12 @@ test("multiline block cells compile JSX, expressions and GFM lists with source p
   expect(textContent(elements(cells[0]!, "span")[0]!)).toBe("3");
   expect(elements(cells[1]!, "li").map(textContent)).toEqual([" first", " second\ntail"]);
   expect(elements(cells[1]!, "input").map((input) => attribute(input, "type"))).toEqual([
-    "checkbox", "checkbox",
+    "checkbox",
+    "checkbox",
   ]);
   expect(elements(cells[1]!, "input").map((input) => attribute(input, "checked"))).toEqual([
-    "", undefined,
+    "",
+    undefined,
   ]);
   const caption = elements(rendered, "caption")[0]!;
   expect(attribute(caption, "id")).toBe("after");
@@ -172,16 +174,22 @@ test("one MDX processor resolves GFM references per document without leaking def
   ].join("\n");
   const first = render(await run(await processor.process(source), runtime));
   expect(elements(first, "a").some((link) => attribute(link, "href") === "/first")).toBe(true);
-  expect(elements(first, "a").some((link) => attribute(link, "data-footnote-ref") !== undefined)).toBe(
-    true,
-  );
+  expect(
+    elements(first, "a").some((link) => attribute(link, "data-footnote-ref") !== undefined),
+  ).toBe(true);
   expect(textContent(elements(first, "del")[0]!)).toBe("old");
-  const second = render(await run(await processor.process("A|B\n-|-\n| [link][ref] | [^note] |"), runtime));
+  const second = render(
+    await run(await processor.process("A|B\n-|-\n| [link][ref] | [^note] |"), runtime),
+  );
   expect(elements(second, "a")).toHaveLength(0);
   expect(elements(second, "section")).toHaveLength(0);
   expect(elements(second, "td").map(textContent)).toEqual(["[link][ref]", "[^note]"]);
-  const third = render(await run(await processor.process(source.replace("/first", "/third")), runtime));
-  expect(elements(third, "a").filter((link) => attribute(link, "href") === "/third")).toHaveLength(1);
+  const third = render(
+    await run(await processor.process(source.replace("/first", "/third")), runtime),
+  );
+  expect(elements(third, "a").filter((link) => attribute(link, "href") === "/third")).toHaveLength(
+    1,
+  );
 });
 
 test("MDX block-cell definitions resolve in other cells and surrounding Markdown", async () => {
@@ -195,9 +203,12 @@ test("MDX block-cell definitions resolve in other cells and surrounding Markdown
   ].join("\n");
   const html = await renderMdx(source);
   expect(elements(html, "a").filter((link) => attribute(link, "href") === "/cell")).toHaveLength(2);
-  expect(elements(html, "a").filter((link) => attribute(link, "data-footnote-ref") !== undefined))
-    .toHaveLength(2);
-  const footnotes = elements(html, "section").filter((section) => attribute(section, "data-footnotes") !== undefined);
+  expect(
+    elements(html, "a").filter((link) => attribute(link, "data-footnote-ref") !== undefined),
+  ).toHaveLength(2);
+  const footnotes = elements(html, "section").filter(
+    (section) => attribute(section, "data-footnotes") !== undefined,
+  );
   expect(footnotes).toHaveLength(1);
   expect(textContent(footnotes[0]!)).toContain("Inner note");
 });

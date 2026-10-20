@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, test } from "vite-plus/test";
 import { runtime } from "../src/internal/backend.js";
 import { expandSection, parseTable, TableScanner } from "../src/core.js";
 import { unified } from "unified";
@@ -19,12 +19,17 @@ test("cell ranges retain raw padding while segments locate inline content", () =
     expect(cell.range).toEqual({ start, end: start + "  x😀  ".length });
     expect(cell.segments).toEqual([{ start: start + 2, end: start + 2 + "x😀".length }]);
     expect(source.slice(cell.range.start, cell.range.end)).toBe("  x😀  ");
-    expect(cell.segments.map(({ start, end }) => source.slice(start, end)).join("\n")).toBe(cell.value);
+    expect(cell.segments.map(({ start, end }) => source.slice(start, end)).join("\n")).toBe(
+      cell.value,
+    );
   }
   const source = "A|B\n-|-\n  left  | right  ";
   const cells = parseTable(source)!.sections[1]!.rows[0]!.cells;
   // 无外侧管道时，行尾空白不属于最后一个单元格的边界。
-  expect(cells.map(({ range }) => source.slice(range.start, range.end))).toEqual(["  left  ", " right"]);
+  expect(cells.map(({ range }) => source.slice(range.start, range.end))).toEqual([
+    "  left  ",
+    " right",
+  ]);
 
   const merged = "A|B\n-|-\n|  origin  ||\n| ^^ ||";
   const cell = parseTable(merged, { rowspan: true })!.sections[1]!.rows[0]!.cells[0]!;
@@ -41,7 +46,10 @@ test("multiline ranges span raw cell boundaries and retain precise segments", ()
     expect(cell.range).toEqual({ start, end });
     expect(cell.block).toBe(true);
     expect(cell.value).toBe("  one\n  two");
-    expect(cell.segments.map(({ start, end }) => source.slice(start, end))).toEqual(["  one", "  two"]);
+    expect(cell.segments.map(({ start, end }) => source.slice(start, end))).toEqual([
+      "  one",
+      "  two",
+    ]);
     expect(cell.segments[1]!.end).toBeLessThan(cell.range.end);
   }
 });
@@ -96,16 +104,17 @@ test("continuation snapshots stay independent as a logical row grows", () => {
   lines.slice(0, 3).forEach(push);
   const first = scanner.finish()!;
   const expected = structuredClone(first);
-  expect(first.sections[1]!.rows.map(row => row.cells[0]!.value)).toEqual(["first"]);
+  expect(first.sections[1]!.rows.map((row) => row.cells[0]!.value)).toEqual(["first"]);
   push(lines[3]!);
   const pending = scanner.finish()!;
-  expect(pending.sections[1]!.rows.map(row => row.cells[0]!.value)).toEqual(["first", "second"]);
+  expect(pending.sections[1]!.rows.map((row) => row.cells[0]!.value)).toEqual(["first", "second"]);
   pending.sections[1]!.rows[0]!.cells[0]!.value = "changed";
   push(lines[4]!);
   const completed = scanner.finish()!.sections[1]!.rows;
   expect(completed).toHaveLength(1);
-  expect(completed[0]!.cells.map(cell => [cell.block, cell.value])).toEqual([
-    [true, "first\nsecond\nlast"], [true, "x\ny\nz"],
+  expect(completed[0]!.cells.map((cell) => [cell.block, cell.value])).toEqual([
+    [true, "first\nsecond\nlast"],
+    [true, "x\ny\nz"],
   ]);
   expect(first).toEqual(expected);
 });
@@ -117,9 +126,7 @@ test("rejection preserves each scanner phase and its source ranges", () => {
     const flags = [scanner.accepted, scanner.committed, scanner.finished];
     expect(scanner.push("rejected", 999)).toBe(false);
     expect(scanner.finish()).toEqual(model);
-    expect([scanner.accepted, scanner.committed, scanner.finished]).toEqual(
-      flags,
-    );
+    expect([scanner.accepted, scanner.committed, scanner.finished]).toEqual(flags);
   };
   reject();
   expect(scanner.push("-|-", 10)).toBe(true);
@@ -158,18 +165,14 @@ test("separator indentation follows four-column tab stops", () => {
 test("a single-pipe separator does not restrict content width", () => {
   const table = parseTable("A|B\n|\nx|y")!;
   expect(table.columns).toEqual([]);
-  expect(
-    table.sections.map((section) =>
-      section.rows[0]!.cells.map((cell) => cell.value),
-    ),
-  ).toEqual([
-    ["A", "B"],
-    ["x", "y"],
-  ]);
-  expect(parseTable("|", { headerless: true })).toBeNull();
-  expect(parseTable("|\nx|y", { headerless: true })!.sections[0]!.kind).toBe(
-    "body",
+  expect(table.sections.map((section) => section.rows[0]!.cells.map((cell) => cell.value))).toEqual(
+    [
+      ["A", "B"],
+      ["x", "y"],
+    ],
   );
+  expect(parseTable("|", { headerless: true })).toBeNull();
+  expect(parseTable("|\nx|y", { headerless: true })!.sections[0]!.kind).toBe("body");
 });
 
 test("zero-column separators integrate with GFM without changing fallback", () => {
@@ -188,18 +191,12 @@ test("zero-column separators integrate with GFM without changing fallback", () =
   const render = (withTable: boolean, source: string) => {
     const processor = base();
     if (withTable) processor.use(remarkMultimdTable);
-    return String(
-      processor.use(remarkRehype).use(rehypeStringify).processSync(source),
-    );
+    return String(processor.use(remarkRehype).use(rehypeStringify).processSync(source));
   };
   expect(render(true, "A|B\n|\nx|y")).toBe(
     "<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>x</td><td>y</td></tr></tbody></table>",
   );
-  for (const source of [
-    "A|B\n---|---\nx|y",
-    "A|B\n \t-| -\nx|y",
-    "plain\n|\ntext",
-  ])
+  for (const source of ["A|B\n---|---\nx|y", "A|B\n \t-| -\nx|y", "plain\n|\ntext"])
     expect(normalize(parseFragment(render(true, source)))).toEqual(
       normalize(parseFragment(render(false, source))),
     );
@@ -234,7 +231,5 @@ test("expanded sections preserve origin identity, holes and section boundaries",
   ]);
   expect(ragged[0]![0]).toBeNull();
   expect(ragged[1]![1]).toBeNull();
-  expect(
-    expandSection({ kind: "body", rows: [], range: { start: 0, end: 0 } }),
-  ).toEqual([]);
+  expect(expandSection({ kind: "body", rows: [], range: { start: 0, end: 0 } })).toEqual([]);
 });

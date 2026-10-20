@@ -1,0 +1,13 @@
+{
+  "name": "multimd-table-playground",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "markdown-it": "catalog:",
+    "multimd-table-release": "npm:multimd-table@0.3.0"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
