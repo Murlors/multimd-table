@@ -1,7 +1,17 @@
 import { runtime } from "./internal/backend.js";
 import { expandSection as expand } from "./internal/wasm.mjs";
 import type { Options, Section, ExpandedCell } from "./types.js";
-export type { Options, Alignment, Range, Cell, Row, Section, Caption, Table, ExpandedCell } from "./types.js";
+export type {
+  Options,
+  Alignment,
+  Range,
+  Cell,
+  Row,
+  Section,
+  Caption,
+  Table,
+  ExpandedCell,
+} from "./types.js";
 
 /** 增量扫描器；finish 返回独立快照，使用结束后须释放所持有的 Rust 内存。 */
 export interface TableScanner {
@@ -17,7 +27,7 @@ export interface TableScanner {
 }
 
 export const TableScanner: {
-  new(options?: Options): TableScanner;
+  new (options?: Options): TableScanner;
   readonly prototype: TableScanner;
 } = runtime.TableScanner;
 

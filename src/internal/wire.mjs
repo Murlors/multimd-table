@@ -18,9 +18,14 @@ export class Reader {
 
   text() {
     const length = this.number();
-    if (length > (this.view.byteLength - this.offset) / 2) throw new RangeError("Truncated response text");
+    if (length > (this.view.byteLength - this.offset) / 2)
+      throw new RangeError("Truncated response text");
     if (length >= 64) {
-      const bytes = new Uint8Array(this.view.buffer, this.view.byteOffset + this.offset, length * 2);
+      const bytes = new Uint8Array(
+        this.view.buffer,
+        this.view.byteOffset + this.offset,
+        length * 2,
+      );
       try {
         const value = utf16.decode(bytes);
         this.offset += length * 2;
@@ -35,45 +40,65 @@ export class Reader {
       this.offset += 2;
     }
     let value = "";
-    for (let i = 0; i < length; i += 8192) value += String.fromCharCode(...units.subarray(i, i + 8192));
+    for (let i = 0; i < length; i += 8192)
+      value += String.fromCharCode(...units.subarray(i, i + 8192));
     return value;
   }
 
   bounds() {
-    const bounds = new Array(this.number());
+    const bounds = Array(this.number());
     for (let i = 0; i < bounds.length; i++) bounds[i] = this.number() | 0;
     return bounds;
   }
-  range() { return { start: this.number(), end: this.number() }; }
+  range() {
+    return { start: this.number(), end: this.number() };
+  }
 
   /** 协议按表、分区、行、单元格顺序读取；slice 只提供 UTF-16 坐标对应的原文。 */
   table(slice) {
     const format = this.number();
     if (!format) return null;
     if (format !== TABLE_FORMAT) throw new Error("Unsupported compact table format");
-    const columns = new Array(this.number());
-    for (let i = 0; i < columns.length; i++) columns[i] = { align: alignments[this.number()], wrap: !!this.number() };
+    // 协议长度为无符号整数；按长度预分配后填充，避免热路径重复扩容。
+    const columns = Array(this.number());
+    for (let i = 0; i < columns.length; i++)
+      columns[i] = { align: alignments[this.number()], wrap: !!this.number() };
     let caption = null;
     if (this.number()) {
-      const id = this.number() ? this.text() : null, side = this.number() ? "bottom" : "top";
-      const range = this.range(), contentRange = this.range();
-      caption = { value: slice(contentRange.start, contentRange.end), id, side, range, contentRange };
+      const id = this.number() ? this.text() : null,
+        side = this.number() ? "bottom" : "top";
+      const range = this.range(),
+        contentRange = this.range();
+      caption = {
+        value: slice(contentRange.start, contentRange.end),
+        id,
+        side,
+        range,
+        contentRange,
+      };
     }
-    const sections = new Array(this.number());
+    const sections = Array(this.number());
     for (let s = 0; s < sections.length; s++) {
-      const kind = this.number() ? "body" : "head", range = this.range(), rows = new Array(this.number());
+      const kind = this.number() ? "body" : "head",
+        range = this.range(),
+        rows = Array(this.number());
       for (let r = 0; r < rows.length; r++) {
-        const range = this.range(), cells = new Array(this.number());
+        const range = this.range(),
+          cells = Array(this.number());
         for (let c = 0; c < cells.length; c++) {
-          const column = this.number(), colspan = this.number(), rowspan = this.number(), block = !!this.number();
-          const range = this.range(), count = this.number();
+          const column = this.number(),
+            colspan = this.number(),
+            rowspan = this.number(),
+            block = !!this.number();
+          const range = this.range(),
+            count = this.number();
           let segments, value;
           if (count === 1) {
             const segment = this.range();
             segments = [segment];
             value = slice(segment.start, segment.end);
           } else {
-            segments = new Array(count);
+            segments = Array(count);
             value = "";
             for (let part = 0; part < count; part++) {
               const segment = this.range();
@@ -82,7 +107,17 @@ export class Reader {
               value += slice(segment.start, segment.end);
             }
           }
-          cells[c] = { column, colspan, rowspan, align: columns[column]?.align ?? null, wrap: columns[column]?.wrap ?? false, block, range, segments, value };
+          cells[c] = {
+            column,
+            colspan,
+            rowspan,
+            align: columns[column]?.align ?? null,
+            wrap: columns[column]?.wrap ?? false,
+            block,
+            range,
+            segments,
+            value,
+          };
         }
         rows[r] = { range, cells };
       }
@@ -92,7 +127,8 @@ export class Reader {
   }
 
   writeResult() {
-    const failed = this.number(), value = this.text();
+    const failed = this.number(),
+      value = this.text();
     if (failed) throw new RangeError(value);
     return value;
   }
@@ -105,22 +141,26 @@ export class Reader {
 
 /** Writer 输入协议对缺省值与显式 null 分别编码；数值不能静默截断。 */
 export function encodeWrite(table) {
-  let bytes = new Uint8Array(1024), view = new DataView(bytes.buffer), offset = 0;
-  const reserve = n => {
+  let bytes = new Uint8Array(1024),
+    view = new DataView(bytes.buffer),
+    offset = 0;
+  const reserve = (n) => {
     if (offset + n <= bytes.length) return;
     const next = new Uint8Array(Math.max(bytes.length * 2, offset + n));
     next.set(bytes);
     bytes = next;
     view = new DataView(bytes.buffer);
   };
-  const number = n => {
-    if (!Number.isInteger(n) || n < 0 || n > 0xffffffff) throw new RangeError("Invalid or out-of-range writer number");
+  const number = (n) => {
+    if (!Number.isInteger(n) || n < 0 || n > 0xffffffff)
+      throw new RangeError("Invalid or out-of-range writer number");
     reserve(4);
     view.setUint32(offset, n, true);
     offset += 4;
   };
-  const text = value => {
-    if (typeof value !== "string") throw new RangeError("Cell and caption values must be Markdown strings");
+  const text = (value) => {
+    if (typeof value !== "string")
+      throw new RangeError("Cell and caption values must be Markdown strings");
     number(value.length);
     reserve(value.length * 2);
     for (let i = 0; i < value.length; i++) {

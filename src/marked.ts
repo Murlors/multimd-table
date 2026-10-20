@@ -24,11 +24,7 @@ interface LexingFrame {
 }
 
 /** 保留宿主块级语法的起始边界；四空格表头仍由核心分隔行规则判断。 */
-function startsHostBlock(
-  value: string,
-  lexer: TokenizerThis["lexer"],
-  continued = false,
-): boolean {
+function startsHostBlock(value: string, lexer: TokenizerThis["lexer"], continued = false): boolean {
   const rules = lexer.options.tokenizer!.rules.block;
   const line = value + "\n";
   return (
@@ -70,11 +66,17 @@ function nextTableStart(
         scanner = undefined;
         previousContinued = false;
       } else {
-        if (scanner && !scanner.push(value, offset)) { scanner.dispose(); scanner = undefined; }
+        if (scanner && !scanner.push(value, offset)) {
+          scanner.dispose();
+          scanner = undefined;
+        }
         if (!scanner) {
           scanner = new TableScanner(options);
           start = offset;
-          if (!scanner.push(value, offset)) { scanner.dispose(); scanner = undefined; }
+          if (!scanner.push(value, offset)) {
+            scanner.dispose();
+            scanner = undefined;
+          }
         }
         previousContinued = !!scanner && !!options.multiline && value.endsWith("\\");
         if (scanner?.accepted) return start;
@@ -82,7 +84,9 @@ function nextTableStart(
       if (newline < 0) break;
       offset = newline + 1;
     }
-  } finally { scanner?.dispose(); }
+  } finally {
+    scanner?.dispose();
+  }
 }
 
 /** 块单元格共享文档引用定义；嵌套解析结束后恢复外层 lexer 的状态。 */
@@ -111,8 +115,9 @@ export function markedMultimdTable(options: Options = {}): MarkedExtension {
       scope = { frame: { failedHeaders: new WeakMap() } };
       scopes.set(lexer, scope);
       const currentScope = scope;
+      // oxlint-disable-next-line typescript/unbound-method -- 保存原方法，包装器通过 Reflect.apply 传回实际 lexer。
       const blockTokens = lexer.blockTokens;
-      lexer.blockTokens = (function (
+      lexer.blockTokens = function (
         this: TokenizerThis["lexer"],
         ...args: Parameters<typeof blockTokens>
       ) {
@@ -123,7 +128,7 @@ export function markedMultimdTable(options: Options = {}): MarkedExtension {
         } finally {
           currentScope.frame = previous;
         }
-      }) as typeof blockTokens;
+      } as typeof blockTokens;
     }
     return scope.frame;
   }
@@ -144,16 +149,12 @@ export function markedMultimdTable(options: Options = {}): MarkedExtension {
             return active.failed.nextStartLength === null
               ? undefined
               : source.length - active.failed.nextStartLength;
-          const start = nextTableStart(
-            source,
-            settings,
-            this.lexer,
-            active?.from,
-          );
+          const start = nextTableStart(source, settings, this.lexer, active?.from);
           if (start === undefined)
             frame.noStartFromLength = Math.max(frame.noStartFromLength ?? 0, source.length);
           // 同一失败段后的寻找结果也只扫描一次，list 中的逐行 text 可直接复用。
-          if (active) active.failed.nextStartLength = start === undefined ? null : source.length - start;
+          if (active)
+            active.failed.nextStartLength = start === undefined ? null : source.length - start;
           return start;
         },
         tokenizer(source, tokens): MarkedMultimdTableToken | undefined {
@@ -195,7 +196,9 @@ export function markedMultimdTable(options: Options = {}): MarkedExtension {
               offset = newline + 1;
             }
             model = scanner.finish();
-          } finally { scanner.dispose(); }
+          } finally {
+            scanner.dispose();
+          }
           if (!model) {
             if (!scanner.committed && failedLengths.length) {
               const failed: FailedHeaders = {
@@ -214,15 +217,11 @@ export function markedMultimdTable(options: Options = {}): MarkedExtension {
           const cellTokens = model.sections.flatMap((section) =>
             section.rows.flatMap((row) =>
               row.cells.map((cell) =>
-                cell.block
-                  ? blockContents(cell.value, this.lexer)
-                  : this.lexer.inline(cell.value),
+                cell.block ? blockContents(cell.value, this.lexer) : this.lexer.inline(cell.value),
               ),
             ),
           );
-          const captionTokens = model.caption
-            ? this.lexer.inline(model.caption.value)
-            : [];
+          const captionTokens = model.caption ? this.lexer.inline(model.caption.value) : [];
           return {
             type: "multimdTable",
             raw: source.slice(0, model.range.end),

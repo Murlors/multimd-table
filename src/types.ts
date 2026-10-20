@@ -9,7 +9,10 @@ export interface Options {
 
 export type Alignment = "left" | "center" | "right" | null;
 /** UTF-16 半开区间，可直接用于 JavaScript 字符串切片。 */
-export interface Range { start: number; end: number }
+export interface Range {
+  start: number;
+  end: number;
+}
 export interface Cell {
   column: number;
   colspan: number;
@@ -24,8 +27,15 @@ export interface Cell {
   /** 首尾物理行的原始单元格边界，包含边缘空白。 */
   range: Range;
 }
-export interface Row { cells: Cell[]; range: Range }
-export interface Section { kind: "head" | "body"; rows: Row[]; range: Range }
+export interface Row {
+  cells: Cell[];
+  range: Range;
+}
+export interface Section {
+  kind: "head" | "body";
+  rows: Row[];
+  range: Range;
+}
 export interface Caption {
   value: string;
   id: string | null;
@@ -40,7 +50,11 @@ export interface Table {
   sections: Section[];
   range: Range;
 }
-export interface ExpandedCell { value: string; origin: Cell; inherited: boolean }
+export interface ExpandedCell {
+  value: string;
+  origin: Cell;
+  inherited: boolean;
+}
 
 /** 写出模型无需源文位置；宿主先把单元格内容序列化为 Markdown。 */
 export interface WriteCell {
@@ -50,8 +64,13 @@ export interface WriteCell {
   value: string;
   block?: boolean;
 }
-export interface WriteRow { cells: readonly WriteCell[] }
-export interface WriteSection { kind: "head" | "body"; rows: readonly WriteRow[] }
+export interface WriteRow {
+  cells: readonly WriteCell[];
+}
+export interface WriteSection {
+  kind: "head" | "body";
+  rows: readonly WriteRow[];
+}
 export interface WriteCaption {
   value: string;
   /** undefined 使用自动标题 ID；null 不生成 ID，读取时须关闭 autolabel。 */

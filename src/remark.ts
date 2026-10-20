@@ -23,12 +23,7 @@ interface TableToken extends Token {
   lineStarts?: Point[];
 }
 export interface MultimdNode extends Parent {
-  type:
-    | "multimdTable"
-    | "multimdSection"
-    | "multimdRow"
-    | "multimdCell"
-    | "multimdCaption";
+  type: "multimdTable" | "multimdSection" | "multimdRow" | "multimdCell" | "multimdCaption";
   children: (RootContent | PhrasingContent | MultimdNode)[];
   data?: Data;
   model?: Table;
@@ -59,8 +54,7 @@ declare module "micromark-util-types" {
   }
 }
 
-const isEol = (code: number | null) =>
-  code === -3 || code === -4 || code === -5;
+const isEol = (code: number | null) => code === -3 || code === -4 || code === -5;
 export type RemarkOptions = Options;
 
 /** 原生 flow 扩展：只消费经过核心识别器接受的行，失败时交回宿主解析器。 */
@@ -72,6 +66,7 @@ function multimdSyntax(
 ): Extension {
   const failedHeaders = new WeakMap<object, Set<number>>();
   const tokenize: Tokenizer = function (effects, ok, nok) {
+    // oxlint-disable-next-line typescript/no-this-alias -- 子 tokenizer 有自己的 this；保留外层宿主上下文。
     const context = this;
     initialize(context.parser);
     const source = getSource();
@@ -90,8 +85,7 @@ function multimdSyntax(
         return start;
         function start(code: number | null): State | undefined {
           // 空行仍须交给 scanner 判断分段，但 micromark 禁止创建空 token。
-          if (code === null || isEol(code))
-            return accept("", context.now(), code);
+          if (code === null || isEol(code)) return accept("", context.now(), code);
           token = effects.enter("multimdLine");
           return consume(code);
         }
@@ -137,11 +131,7 @@ function multimdSyntax(
         if (source[start] === "\r") start++;
         if (source[start] === "\n") start++;
         let end = start;
-        while (
-          end < source.length &&
-          source[end] !== "\r" &&
-          source[end] !== "\n"
-        ) end++;
+        while (end < source.length && source[end] !== "\r" && source[end] !== "\n") end++;
         nextConcrete = cellBounds(source.slice(start, end)).length >= 2;
       }
       if (concrete !== nextConcrete) {
@@ -153,7 +143,11 @@ function multimdSyntax(
     }
     function finish(code: number | null): State | undefined {
       let model: Table | null;
-      try { model = scanner.finish(); } finally { release(); }
+      try {
+        model = scanner.finish();
+      } finally {
+        release();
+      }
       if (!model) return fail(code);
       table.table = model;
       table.lineStarts = lineStarts;
@@ -162,8 +156,7 @@ function multimdSyntax(
     }
     function fail(code: number | null): State | undefined {
       // 无分隔行的连续管道文本，其后缀也不可能成为表格；避免逐行重复试探整段。
-      if (!scanner.committed)
-        for (const point of lineStarts) failed.add(point.offset);
+      if (!scanner.committed) for (const point of lineStarts) failed.add(point.offset);
       release();
       return nok(code);
     }
@@ -192,8 +185,7 @@ function tableReferenceSeeds(tree: Root): References {
   function collect(node: any, inTable: boolean) {
     const scope = inTable ? inner : outer;
     if (node.type === "definition") scope.links.add(node.identifier.toUpperCase());
-    if (node.type === "footnoteDefinition")
-      scope.footnotes.add(node.identifier.toUpperCase());
+    if (node.type === "footnoteDefinition") scope.footnotes.add(node.identifier.toUpperCase());
     for (const child of node.children || [])
       collect(child, inTable || node.type === "multimdTable");
   }
@@ -308,10 +300,8 @@ function multimdFromMarkdown(
         };
         const tables: PendingTableNode[] = [];
         function collect(node: any) {
-          if (node.type === "multimdTable" && node.sourceLineStarts)
-            tables.push(node);
-          if (node.type === "definition")
-            references.links.push(node.identifier.toUpperCase());
+          if (node.type === "multimdTable" && node.sourceLineStarts) tables.push(node);
+          if (node.type === "definition") references.links.push(node.identifier.toUpperCase());
           if (node.type === "footnoteDefinition")
             references.footnotes.push(node.identifier.toUpperCase());
           if (state.depth > 1 && (node.type === "definition" || node.type === "footnoteDefinition"))
@@ -371,14 +361,13 @@ function hydrate(
     }
     // 同一表的引用集合固定；复用扩展配置，空集合不增加逐行试探的初始化器。
     blockOptions ||= {
-      extensions: references.links.length || references.footnotes.length
-        ? [...extensions.syntax, definitionSyntax(references)]
-        : extensions.syntax,
+      extensions:
+        references.links.length || references.footnotes.length
+          ? [...extensions.syntax, definitionSyntax(references)]
+          : extensions.syntax,
       mdastExtensions: extensions.mdast,
     };
-    const parsed = withSource(value, () =>
-      fromMarkdown(value, blockOptions),
-    );
+    const parsed = withSource(value, () => fromMarkdown(value, blockOptions));
     // 子解析器使用局部坐标；逐段映射回原始文档，跨行单元格不会丢失引用位置。
     function remap(child: any) {
       if (child.position) {
@@ -386,9 +375,7 @@ function hydrate(
           const p = child.position[key];
           const segment = segments[Math.min(p.line - 1, segments.length - 1)];
           if (segment)
-            child.position[key] = point(
-              Math.min(segment.end, segment.start + p.column - 1),
-            );
+            child.position[key] = point(Math.min(segment.end, segment.start + p.column - 1));
         }
       }
       for (const next of child.children || []) remap(next);
@@ -466,10 +453,7 @@ function hydrate(
           for (const key of ["start", "end"] as const) {
             const p = child.position[key];
             child.position[key] = point(
-              Math.min(
-                item.segments[0]!.end,
-                item.segments[0]!.start + p.column - 2,
-              ),
+              Math.min(item.segments[0]!.end, item.segments[0]!.start + p.column - 2),
             );
           }
         for (const next of child.children || []) remap(next);
@@ -484,66 +468,70 @@ function hydrate(
 }
 
 /** 安装到 remark-parse；放在 remark-gfm 之后，使扩展表格拥有语法优先级。 */
-const remarkMultimdTable: Plugin<[RemarkOptions?], Root> =
-  function (options = {}) {
-    let source: string | undefined;
-    let scanners = new Set<TableScanner>();
-    const track = (scanner: TableScanner) => {
-      const scope = scanners;
-      scope.add(scanner);
-      return () => { scope.delete(scanner); scanner.dispose(); };
+const remarkMultimdTable: Plugin<[RemarkOptions?], Root> = function (options = {}) {
+  let source: string | undefined;
+  let scanners = new Set<TableScanner>();
+  const track = (scanner: TableScanner) => {
+    const scope = scanners;
+    scope.add(scanner);
+    return () => {
+      scope.delete(scanner);
+      scanner.dispose();
     };
-    const state: ParseState = {
-      links: [], footnotes: [], depth: 0, hasTableDefinitions: false,
-    };
-    /** 同步解析拥有独立源文本作用域；嵌套单元格解析结束后恢复外层坐标系。 */
-    function withSource<T>(value: string, parse: () => T): T {
-      const previous = source;
-      const previousDepth = state.depth;
-      const previousScanners = scanners;
-      scanners = new Set();
-      source = value;
-      state.depth++;
-      try {
-        return parse();
-      } finally {
-        for (const scanner of scanners) scanner.dispose();
-        scanners = previousScanners;
-        source = previous;
-        state.depth = previousDepth;
-      }
-    }
-    const parser = this.parser;
-    if (parser)
-      this.parser = (value, file) => {
-        const previous = { ...state };
-        state.links = [];
-        state.footnotes = [];
-        state.depth = 0;
-        state.hasTableDefinitions = false;
-        try {
-          return withSource(value, () => {
-            const tree = parser(value, file) as Root;
-            // 常见的内联表格没有块定义，不为这个少数场景追加全树遍历。
-            if (!state.hasTableDefinitions) return tree;
-            const discovered = tableReferenceSeeds(tree);
-            if (!discovered.links.length && !discovered.footnotes.length)
-              return tree;
-            // 单元格块定义在首轮 hydrate 才可见；最多重跑一次，让表外及其他格
-            // 的引用也经过宿主 inline tokenizer，避免改写已经生成的 text 节点。
-            state.links = discovered.links;
-            state.footnotes = discovered.footnotes;
-            return parser(value, file);
-          });
-        } finally {
-          Object.assign(state, previous);
-        }
-      };
-    const data = this.data();
-    const syntax = (data.micromarkExtensions ||= []);
-    const mdast = (data.fromMarkdownExtensions ||= []);
-    syntax.push(multimdSyntax(options, () => source, initializeReferences(state), track));
-    mdast.push(multimdFromMarkdown(() => ({ syntax, mdast }), withSource, state));
   };
+  const state: ParseState = {
+    links: [],
+    footnotes: [],
+    depth: 0,
+    hasTableDefinitions: false,
+  };
+  /** 同步解析拥有独立源文本作用域；嵌套单元格解析结束后恢复外层坐标系。 */
+  function withSource<T>(value: string, parse: () => T): T {
+    const previous = source;
+    const previousDepth = state.depth;
+    const previousScanners = scanners;
+    scanners = new Set();
+    source = value;
+    state.depth++;
+    try {
+      return parse();
+    } finally {
+      for (const scanner of scanners) scanner.dispose();
+      scanners = previousScanners;
+      source = previous;
+      state.depth = previousDepth;
+    }
+  }
+  const parser = this.parser;
+  if (parser)
+    this.parser = (value, file) => {
+      const previous = { ...state };
+      state.links = [];
+      state.footnotes = [];
+      state.depth = 0;
+      state.hasTableDefinitions = false;
+      try {
+        return withSource(value, () => {
+          const tree = parser(value, file) as Root;
+          // 常见的内联表格没有块定义，不为这个少数场景追加全树遍历。
+          if (!state.hasTableDefinitions) return tree;
+          const discovered = tableReferenceSeeds(tree);
+          if (!discovered.links.length && !discovered.footnotes.length) return tree;
+          // 单元格块定义在首轮 hydrate 才可见；最多重跑一次，让表外及其他格
+          // 的引用也经过宿主 inline tokenizer，避免改写已经生成的 text 节点。
+          state.links = discovered.links;
+          state.footnotes = discovered.footnotes;
+          return parser(value, file);
+        });
+      } finally {
+        Object.assign(state, previous);
+      }
+    };
+  const data = this.data();
+  const syntax = (data.micromarkExtensions ||= []);
+  const mdast = (data.fromMarkdownExtensions ||= []);
+  syntax.push(multimdSyntax(options, () => source, initializeReferences(state), track));
+  mdast.push(multimdFromMarkdown(() => ({ syntax, mdast }), withSource, state));
+};
 
 export default remarkMultimdTable;

@@ -5,15 +5,9 @@ import { TableScanner, type Options, type Range } from "./core.js";
  * 替换 markdown-it 的原生 table 规则，保留宿主的启用状态和渲染流水线。
  * CommonMark preset 默认关闭 table；使用该 preset 时须显式 enable("table")。
  */
-export default function markdownItMultimdTable(
-  md: MarkdownIt,
-  options: Options = {},
-): void {
+export default function markdownItMultimdTable(md: MarkdownIt, options: Options = {}): void {
   const settings = { ...options };
-  const failures = new WeakMap<
-    StateBlock,
-    { source: string; lines: Set<string> }
-  >();
+  const failures = new WeakMap<StateBlock, { source: string; lines: Set<string> }>();
   const context = (state: StateBlock, line: number, endLine: number): string =>
     [
       line,
@@ -32,7 +26,7 @@ export default function markdownItMultimdTable(
     const begin = state.bMarks[line]!;
     for (let pos = begin; pos < begin + state.tShift[line]!; pos++) {
       if (state.src.charCodeAt(pos) === 9) {
-        indent += 4 - (indent + state.bsCount[line]!) % 4;
+        indent += 4 - ((indent + state.bsCount[line]!) % 4);
         // 完全属于容器的 Tab 不影响表头；跨越容器边界的 Tab 保留代码缩进语义。
         if (indent > state.blkIndent) return true;
       } else indent++;
@@ -71,16 +65,10 @@ export default function markdownItMultimdTable(
       state.parentType = "table";
       try {
         for (let line = startLine; line < endLine; line++) {
-          if (!state.isEmpty(line) && state.sCount[line]! < state.blkIndent)
-            break;
+          if (!state.isEmpty(line) && state.sCount[line]! < state.blkIndent) break;
           const value = state.getLines(line, line + 1, state.blkIndent, false);
           const nextContinued = scanner.options.multiline && value.endsWith("\\");
-          if (
-            !scanner.committed &&
-            !continued &&
-            !nextContinued &&
-            tabCodeIndent(state, line)
-          )
+          if (!scanner.committed && !continued && !nextContinued && tabCodeIndent(state, line))
             break;
           // 提交后的合法管道行属于表格；识别失败时，外层块级语法交回宿主。
           if (
@@ -104,9 +92,8 @@ export default function markdownItMultimdTable(
 
       if (!scanner.accepted) {
         if (!scanner.committed && lineOffsets.length) {
-          const cache = failed?.source === state.src
-            ? failed
-            : { source: state.src, lines: new Set<string>() };
+          const cache =
+            failed?.source === state.src ? failed : { source: state.src, lines: new Set<string>() };
           // 无分隔行的已扫描段，其后缀同样不能成表；容器修改行标记后须重新识别。
           for (let index = 0; index < lineOffsets.length; index++)
             cache.lines.add(context(state, startLine + index, endLine));
@@ -145,8 +132,7 @@ export default function markdownItMultimdTable(
         const token = state.push("caption_open", "caption", 1);
         token.map = map(caption.range);
         if (caption.id !== null) token.attrSet("id", caption.id);
-        if (caption.side === "bottom")
-          token.attrSet("style", "caption-side: bottom");
+        if (caption.side === "bottom") token.attrSet("style", "caption-side: bottom");
         inline(caption.value, caption.contentRange);
         state.push("caption_close", "caption", -1);
       }
@@ -174,8 +160,8 @@ export default function markdownItMultimdTable(
                   nested.map = [
                     lineAt(cell.segments[begin]?.start ?? cell.range.start),
                     lineAt(
-                      cell.segments[Math.min(end, cell.segments.length) - 1]
-                        ?.start ?? cell.range.end,
+                      cell.segments[Math.min(end, cell.segments.length) - 1]?.start ??
+                        cell.range.end,
                     ) + 1,
                   ];
                 }
@@ -191,7 +177,9 @@ export default function markdownItMultimdTable(
       state.push("table_close", "table", -1);
       state.line = map(table.range)[1];
       return true;
-    } finally { scanner.dispose(); }
+    } finally {
+      scanner.dispose();
+    }
   }
 
   md.block.ruler.at("table", tableRule, { alt: ["paragraph", "reference"] });
