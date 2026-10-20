@@ -11,7 +11,7 @@ function element<T extends HTMLElement>(id: string): T {
 }
 const source = element<HTMLTextAreaElement>("source");
 const selector = element<HTMLSelectElement>("example");
-const preview = element<HTMLIFrameElement>("preview");
+let preview = element<HTMLIFrameElement>("preview");
 const model = element<HTMLPreElement>("model");
 const written = element<HTMLPreElement>("written");
 const status = element("parse-status");
@@ -48,10 +48,17 @@ function updateActions() {
   copyOutput.disabled = pending || !result?.table || (view === "write" && result.written === null);
   apply.disabled = pending || result?.written == null;
 }
+// 每次结果使用独立的 sandbox 文档，避免复用 iframe 时 srcdoc 导航留下空白预览。
+function updatePreview(html: string) {
+  const frame = preview.cloneNode(false) as HTMLIFrameElement;
+  frame.srcdoc = previewDocument(html);
+  preview.replaceWith(frame);
+  preview = frame;
+}
 function show(next: Result) {
   pending = false;
   result = next;
-  preview.srcdoc = previewDocument(next.html);
+  updatePreview(next.html);
   model.textContent = next.table ? JSON.stringify(next.table, null, 2) : "";
   written.textContent = next.written ?? "";
   element("model-empty").hidden = !!next.table;
@@ -128,7 +135,7 @@ source.value = examples[0]!.source;
 setOptions(initialOptions);
 loadShared();
 const initialNotice = notice.textContent;
-preview.srcdoc = previewDocument("");
+updatePreview("");
 
 try {
   worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });

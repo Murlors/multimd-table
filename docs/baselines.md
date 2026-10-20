@@ -137,6 +137,11 @@ that CSP. Node SSR acceptance keeps the package external so its binary resolves
 inside the installed package. Fully bundled SSR needs bundler-specific asset
 handling and is not a supported zero-configuration path.
 
+For Playground browser acceptance, edit a table repeatedly, reset the example,
+apply canonical write-back, and reopen a share link. Confirm both the model and
+the rendered iframe update after each action; a successful parser status alone
+does not establish that the isolated preview document rendered.
+
 A consumer's existing Bun tests can run against that exact tarball:
 
 ```sh
