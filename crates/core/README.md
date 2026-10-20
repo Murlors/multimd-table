@@ -18,21 +18,21 @@ checked-in lockfile with `--locked`.
 
 ```sh
 # Rust, transport, package tests and production build.
-bun run check
+vp run verify
 # Actual tarball in isolated Node/Bun/TypeScript consumers and browser bundles.
-bun run check:package
+vp run verify:package
 # Frozen contracts, then the same complete models in Python and Go.
-bun run core:check
+vp run core:check
 
 # Maintained end-to-end performance suite; use fresh result paths.
-bun run bench --out .performance/baseline
-bun run bench --out .performance/candidate
-bun run bench:compare .performance/baseline-node.json .performance/candidate-node.json
+vp run bench --out .performance/baseline
+vp run bench --out .performance/candidate
+vp run bench:compare .performance/baseline-node.json .performance/candidate-node.json
 
 # Separate diagnostic stages: transport, Rust execution and object construction.
-bun run core:profile --only plain-1000 --out .performance/shared-core/profile
-bun run core:profile --writer --only plain-1000 --out .performance/shared-core/writer-profile
-bun run core:profile --native-only --only plain-1000 --out .performance/shared-core/native-profile
+vp run core:profile --only plain-1000 --out .performance/shared-core/profile
+vp run core:profile --writer --only plain-1000 --out .performance/shared-core/writer-profile
+vp run core:profile --native-only --only plain-1000 --out .performance/shared-core/native-profile
 
 # Optional Python observation, after core:check generates the corpus.
 python3 crates/core/bindings/benchmark_python.py \
@@ -73,17 +73,17 @@ parser.
 
 The relevant entry points are:
 
-| File | Responsibility |
-| --- | --- |
-| `src/core.rs`, `src/writer.rs` | Markdown grammar, core model and canonical writing |
-| `src/wire.rs`, `src/json.rs` | Rust-side binary/native JSON transport |
-| `src/lib.rs` | Operational C ABI and owned input/result/scanner handles |
-| `src/profile.rs` | Borrowed handles used by stage diagnostics; re-exported to preserve ABI paths |
-| project `src/internal/wire.mjs` | Binary reads/writes and eager JS model construction |
-| project `src/internal/wasm.mjs` | WASM calls, resource ownership and diagnostic lifetimes |
-| project `src/internal/backend.ts` | Embedded-module loading and host UTF-16 copying |
-| project `src/types.ts`, `src/core.ts`, `src/writer.ts` | Public types and synchronous entry points |
-| `bindings/*.mjs` | Thin raw-WASM loaders/re-exports used by diagnostics |
+| File                                                   | Responsibility                                                                |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `src/core.rs`, `src/writer.rs`                         | Markdown grammar, core model and canonical writing                            |
+| `src/wire.rs`, `src/json.rs`                           | Rust-side binary/native JSON transport                                        |
+| `src/lib.rs`                                           | Operational C ABI and owned input/result/scanner handles                      |
+| `src/profile.rs`                                       | Borrowed handles used by stage diagnostics; re-exported to preserve ABI paths |
+| project `src/internal/wire.mjs`                        | Binary reads/writes and eager JS model construction                           |
+| project `src/internal/wasm.mjs`                        | WASM calls, resource ownership and diagnostic lifetimes                       |
+| project `src/internal/backend.ts`                      | Embedded-module loading and host UTF-16 copying                               |
+| project `src/types.ts`, `src/core.ts`, `src/writer.ts` | Public types and synchronous entry points                                     |
+| `bindings/*.mjs`                                       | Thin raw-WASM loaders/re-exports used by diagnostics                          |
 
 The JS codec is independent of a WASM instance. It reads a supplied ArrayBuffer
 and follows table → section → row → cell field order in one sequential decoder;

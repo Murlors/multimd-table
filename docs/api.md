@@ -43,11 +43,11 @@ Further `push` or `finish` calls throw. The adapters handle this lifetime for
 their own scanners; direct users must not depend on garbage collection for timely
 release of WASM memory.
 
-| Flag | Meaning |
-| --- | --- |
-| `committed` | A delimiter has been consumed. |
-| `accepted` | A model is available: a delimiter and at least one content row. |
-| `finished` | A bottom caption ended the table. |
+| Flag        | Meaning                                                         |
+| ----------- | --------------------------------------------------------------- |
+| `committed` | A delimiter has been consumed.                                  |
+| `accepted`  | A model is available: a delimiter and at least one content row. |
+| `finished`  | A bottom caption ended the table.                               |
 
 With `headerless`, a consumed delimiter can be `committed` without being
 `accepted` until the first body row arrives.
@@ -64,13 +64,13 @@ No valid pipes yields `[]`. Adjacent boundaries delimit raw cell content.
 
 `defaults` is read-only. The core and all adapters accept the same five options:
 
-| Option | Default |
-| --- | --- |
-| `rowspan` | `false` |
-| `multiline` | `false` |
+| Option       | Default |
+| ------------ | ------- |
+| `rowspan`    | `false` |
+| `multiline`  | `false` |
 | `headerless` | `false` |
-| `multibody` | `true` |
-| `autolabel` | `true` |
+| `multibody`  | `true`  |
+| `autolabel`  | `true`  |
 
 See the [README](../README.md#syntax) for syntax and option behavior.
 
@@ -100,14 +100,19 @@ interface WriteTable {
   sections: readonly WriteSection[];
   caption?: WriteCaption | null;
 }
-interface WriteSection { kind: "head" | "body"; rows: readonly WriteRow[] }
-interface WriteRow { cells: readonly WriteCell[] }
+interface WriteSection {
+  kind: "head" | "body";
+  rows: readonly WriteRow[];
+}
+interface WriteRow {
+  cells: readonly WriteCell[];
+}
 interface WriteCell {
   column: number;
   colspan?: number; // default 1
   rowspan?: number; // default 1
-  value: string;    // Markdown, serialized by the host
-  block?: boolean;  // default false
+  value: string; // Markdown, serialized by the host
+  block?: boolean; // default false
 }
 interface WriteCaption {
   value: string;

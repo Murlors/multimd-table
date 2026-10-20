@@ -2,13 +2,16 @@
 
 ## Correctness
 
-Run `bun run check` for type checking, Rust and transport tests, tests in normal
-and development conditions, and a production build. Run `bun run check:package` to validate the packed package
-in isolated consumers. These remain required CI checks.
+Run `vp run verify` for format/lint/type checks, Rust tests, library/transport
+tests in production and development conditions, Playground tests, both production
+builds and isolated packed-package consumers. CI uses this same complete gate.
+`vp run verify:package` runs only the build and isolated package acceptance.
 
-The default implementation is now Rust/WASM. Tests require the generated embedded
-module; `bun run test`, `bun run check` and `bun run build` prepare it using the
-locked Rust crate. Direct `bun test` requires `bun run prepare:wasm` first.
+`vp test` runs all three Vitest projects; use `--project production`,
+`--project development` or `--project playground` to select one. Tests and packaging
+share `tooling/prepare-wasm.ts` to prepare the locked Rust/WASM module automatically.
+`vp check` checks the whole workspace, including Playground types. Verification
+and measurement commands do not cache results.
 
 The baseline combines existing hand-written syntax contracts and new generated checks:
 
@@ -50,19 +53,20 @@ From the repository root, with dependencies installed and Node and Bun available
 
 ```sh
 # Full measurement, both runtimes. Choose a fresh output prefix for each run.
-bun run bench --out .performance/baseline
-bun run bench --out .performance/candidate
+vp run bench --out .performance/baseline
+vp run bench --out .performance/candidate
 
 # Compare each runtime separately. Negative time change means faster.
-bun run bench:compare .performance/baseline-node.json .performance/candidate-node.json
-bun run bench:compare .performance/baseline-bun.json .performance/candidate-bun.json
+vp run bench:compare .performance/baseline-node.json .performance/candidate-node.json
+vp run bench:compare .performance/baseline-bun.json .performance/candidate-bun.json
 
 # One runtime, or a shorter smoke run for CI/tooling development.
-bun run bench --runtime node --out .performance/node-only
-bun run bench --quick --out .performance/smoke
+vp run bench --runtime node --out .performance/node-only
+vp run bench --quick --out .performance/smoke
 ```
 
-`bench` builds the production modules and benchmark runner before measuring. It
+`bench` builds the production modules before measuring and runs the same TypeScript
+script directly on Node and Bun. It
 does not install dependencies, fetch an old release or modify library sources.
 Every build recreates `dist/`, so removed entry points and old source maps cannot
 survive in the generated output.
@@ -104,7 +108,7 @@ CI runs the quick profile on Node and Bun and uploads both JSON reports as the
 `performance-<commit>` artifact. Script errors and failed output checks fail the job;
 timing fluctuations do not. Download artifacts from GitHub Actions for inspection,
 and use full local runs for performance decisions. Machine-specific reports and the
-built runner stay under ignored `.performance/`, outside the npm package.
+generated vectors stay under ignored `.performance/`, outside the npm package.
 
 The [Rust shared core](../crates/core/README.md) supplies the default package and
 the native Python/Go probes. `core:check` validates frozen regression contracts
@@ -114,7 +118,7 @@ between saved reports.
 
 ## Packed-package and consumer acceptance
 
-`bun run check:package` packs the actual whitelist of published files, installs
+`vp run verify:package` packs the actual whitelist of published files, installs
 that tarball into isolated consumers and checks Node, Bun and TypeScript. Core
 and writer declarations are checked without DOM types or optional peers. The
 core probe warms a 5,000-row workload, then checks 100 further parses without

@@ -16,20 +16,21 @@ JavaScript APIs and TypeScript declarations.
   adapter with react-markdown and MDX.
 - **Write:** generate table Markdown from structured data with span validation.
 
-[API reference](https://github.com/Murlors/multimd-table/blob/main/docs/api.md)
+[API reference](https://github.com/Murlors/multimd-table/blob/main/docs/api.md) · [Playground](#playground)
 
 If you find multimd-table useful, please consider [giving it a star on GitHub](https://github.com/Murlors/multimd-table).
 
 ```markdown
 [Quarterly sales]
 | Region | Team | Sales ||
-| ^^     | ^^   | Q1 | Q2 |
-| ------ | ---- | -- | -- |
-| North  | A    | 12 | 15 |
-| ^^     | B    |  8 | 10 |
 
-| South  | C    |  9 | 11 |
-| Total         ||| 65 |
+| ^^    | ^^  | Q1  | Q2  |
+| ----- | --- | --- | --- |
+| North | A   | 12  | 15  |
+| ^^    | B   | 8   | 10  |
+
+| South | C | 9 | 11 |
+| Total ||| 65 |
 ```
 
 With `{ rowspan: true }`:
@@ -63,13 +64,13 @@ ESM only, with TypeScript declarations. Install the host and optional peers for
 the adapter you use. The core and writer have no external JavaScript runtime
 peers; the package embeds its compiled WASM, so consumers do not need Rust.
 
-| Entry | Host / peers |
-| --- | --- |
-| `multimd-table` | None at runtime |
-| `multimd-table/writer` | None at runtime |
-| `multimd-table/remark` | `unified` 11, `mdast-util-from-markdown` 2 |
-| `multimd-table/marked` | `marked` 18 (Node.js 20+ when used in Node) |
-| `multimd-table/markdown-it` | `markdown-it` 15 |
+| Entry                       | Host / peers                                |
+| --------------------------- | ------------------------------------------- |
+| `multimd-table`             | None at runtime                             |
+| `multimd-table/writer`      | None at runtime                             |
+| `multimd-table/remark`      | `unified` 11, `mdast-util-from-markdown` 2  |
+| `multimd-table/marked`      | `marked` 18 (Node.js 20+ when used in Node) |
+| `multimd-table/markdown-it` | `markdown-it` 15                            |
 
 APIs remain synchronous after the ESM import. Each module graph compiles and
 instantiates the embedded core on first import; that initialization has a cost
@@ -92,9 +93,7 @@ import remarkMultimdTable from "multimd-table/remark";
 
 const source = "A|B\n-|-\nmerged||\n^^||";
 
-<ReactMarkdown
-  remarkPlugins={[remarkGfm, [remarkMultimdTable, { rowspan: true }]]}
->
+<ReactMarkdown remarkPlugins={[remarkGfm, [remarkMultimdTable, { rowspan: true }]]}>
   {source}
 </ReactMarkdown>;
 ```
@@ -117,13 +116,15 @@ import remarkRehype from "remark-rehype";
 import rehypeStringify from "rehype-stringify";
 import remarkMultimdTable from "multimd-table/remark";
 
-const html = String(unified()
-  .use(remarkParse)
-  .use(remarkGfm)
-  .use(remarkMultimdTable, { rowspan: true })
-  .use(remarkRehype)
-  .use(rehypeStringify)
-  .processSync("A|B\n-|-\nmerged||\n^^||"));
+const html = String(
+  unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkMultimdTable, { rowspan: true })
+    .use(remarkRehype)
+    .use(rehypeStringify)
+    .processSync("A|B\n-|-\nmerged||\n^^||"),
+);
 ```
 
 ## Marked
@@ -189,7 +190,7 @@ import { parseTable, expandSection } from "multimd-table";
 
 const table = parseTable("A|B\n-|-\nmerged||\n^^||", { rowspan: true });
 if (table) {
-  const body = table.sections.find(section => section.kind === "body");
+  const body = table.sections.find((section) => section.kind === "body");
   const grid = body ? expandSection(body) : [];
   // grid[1][0].value === "merged"
   // grid[1][0].origin === grid[0][0].origin
@@ -220,10 +221,15 @@ import { stringifyTable } from "multimd-table/writer";
 
 const source = stringifyTable({
   columns: [{ align: null }, { align: "right" }],
-  sections: [{ kind: "body", rows: [
-    { cells: [{ column: 0, colspan: 2, rowspan: 2, value: "Merged" }] },
-    { cells: [] }, // Covered by the cell above.
-  ] }],
+  sections: [
+    {
+      kind: "body",
+      rows: [
+        { cells: [{ column: 0, colspan: 2, rowspan: 2, value: "Merged" }] },
+        { cells: [] }, // Covered by the cell above.
+      ],
+    },
+  ],
 });
 ```
 
@@ -265,7 +271,7 @@ row. End the final line without a backslash:
 ```markdown
 | Task   | Notes   |
 | ------ | ------- |
-| Launch | - Build |\
+| Launch | - Build | \   |
 |        | - Test  |
 ```
 
@@ -281,23 +287,23 @@ before its first body row. With `multibody: false`, any blank line ends the tabl
 
 The core and all adapters accept the same options:
 
-| Option | Default | Effect |
-| --- | --- | --- |
-| `rowspan` | `false` | Recognize `^^` as an upward continuation. |
-| `multiline` | `false` | Join backslash-ended rows and parse their cells as blocks. |
-| `headerless` | `false` | Allow a table to start with its delimiter. |
-| `multibody` | `true` | Allow one blank line between body sections. |
-| `autolabel` | `true` | Generate an ID for an unlabeled caption. |
+| Option       | Default | Effect                                                     |
+| ------------ | ------- | ---------------------------------------------------------- |
+| `rowspan`    | `false` | Recognize `^^` as an upward continuation.                  |
+| `multiline`  | `false` | Join backslash-ended rows and parse their cells as blocks. |
+| `headerless` | `false` | Allow a table to start with its delimiter.                 |
+| `multibody`  | `true`  | Allow one blank line between body sections.                |
+| `autolabel`  | `true`  | Generate an ID for an unlabeled caption.                   |
 
 ## API
 
-| Core export | Result |
-| --- | --- |
-| `parseTable(source, options?)` | Leading `Table`, or `null` |
-| `expandSection(section)` | Rectangular grid with `origin`, `inherited` and `null` holes |
-| `TableScanner` | Incremental parsing with `push(line, offset)`, `finish()` and `dispose()` |
-| `cellBounds(line)` | UTF-16 pipe boundaries |
-| `defaults` | Read-only option defaults |
+| Core export                    | Result                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| `parseTable(source, options?)` | Leading `Table`, or `null`                                                |
+| `expandSection(section)`       | Rectangular grid with `origin`, `inherited` and `null` holes              |
+| `TableScanner`                 | Incremental parsing with `push(line, offset)`, `finish()` and `dispose()` |
+| `cellBounds(line)`             | UTF-16 pipe boundaries                                                    |
+| `defaults`                     | Read-only option defaults                                                 |
 
 Adapters use default imports; core functions and types use named imports. See
 the [API reference](https://github.com/Murlors/multimd-table/blob/main/docs/api.md)
@@ -331,18 +337,65 @@ Marked 18.1.1's native Setext-heading detection is slow on Bun 1.4.3 for long li
 with many continuation lines, even without tables. Use Node or another adapter
 for that workload.
 
+## Playground
+
+The static Playground uses the published `multimd-table@0.3.0` package. Try merged
+cells, multiline content, headerless tables and escaping; switch between rendered
+Markdown, the complete model and canonical writer output. Parser options update
+live. You can copy results, apply written Markdown without losing the rest of the
+document, or share an example through a URL fragment.
+
+```sh
+vp install
+vp -C playground dev
+```
+
+Open `http://127.0.0.1:4173`. Vite updates the page as sources change. No Rust toolchain is needed. Parsing and rendering run in a
+browser Worker; input is not uploaded. Preview runs in a sandbox with scripts and
+remote content disabled. Share links contain their Markdown, so only share input
+you intend others to read.
+
+Run `vp -C playground check`, `vp -C playground test` and `vp -C playground build`
+for static checks, boundary tests and a production build. The deployable files are in `playground/dist/`; their relative asset URLs
+also work under a project subdirectory. Serve them with any static host.
+
+GitHub Pages deployment is prepared in the **Playground** workflow. After pushing
+the changes, set **Settings → Pages → Source** to **GitHub Actions**, then manually
+run that workflow on `main`. Pushes and pull requests only validate the site;
+deployment requires the manual run. No hosted Playground is deployed by these
+local commands.
+
 ## Development
 
-Developing the core requires Rust and the `wasm32-unknown-unknown` target
-(`rustup target add wasm32-unknown-unknown`). Run `bun run prepare:wasm` before a
-direct `bun test`; the package scripts prepare it automatically.
+Use Vite+ with the latest Node.js LTS (`vp env default lts`) and the Bun version
+declared in `packageManager`. Vite+ and shared markdown-it versions are declared
+in the root catalog; CI reads the same toolchain version and uses Node.js LTS.
+Run `vp install` once at the repository root. Core development also requires
+Rust and the `wasm32-unknown-unknown` target
+(`rustup target add wasm32-unknown-unknown`).
 
-Run `bun run check` for correctness and `bun run check:package` for isolated package
-consumers, type declarations and browser/Worker bundles. The latter writes a
-browser acceptance page to `.performance/package-browser/index.html`; serve the
-repository over local HTTP to run it. `bun run bench --out .performance/baseline` measures the core, writer and
-all three adapters on Node and Bun. See the [baseline guide](docs/baselines.md) for
-fixed workloads, report comparison and CI artifacts.
+| Command                 | Purpose                                                                                 |
+| ----------------------- | --------------------------------------------------------------------------------------- |
+| `vp check`              | Format, lint and type checks across the repository                                      |
+| `vp test`               | Library/transport tests in production and development conditions, plus Playground tests |
+| `vp pack`               | ESM entry points and declarations, checked by publint and Are the Types Wrong           |
+| `vp -C playground dev`  | Playground with live updates                                                            |
+| `vp run verify`         | Complete gate: static checks, Rust/tests, both builds and isolated package consumers    |
+| `vp run verify:package` | Build and validate only the actual tarball in Node, Bun, TypeScript and browser bundles |
+
+Tests and packaging share one Rust/WASM preparation function. Filter tests with
+`vp test --project production`, `--project development` or `--project playground`.
+Run `vp check` before committing; CI and package creation run the complete gate.
+Verification and performance measurements always execute without task caching.
+Formatting and lint rules use Oxfmt/Oxlint defaults with type-aware checks enabled.
+The frozen compatibility fixture is excluded from formatting.
+Declaration generation currently uses the TypeScript 6 compiler API; adopting
+TypeScript 7 requires compatible declaration tooling.
+
+`vp run bench --out .performance/baseline` measures the core, writer and adapters
+on Node and Bun. The same TypeScript runner executes directly in both runtimes.
+See the [baseline guide](docs/baselines.md) for workloads, comparisons, cross-language
+checks and the packed-package browser acceptance page.
 
 ## License
 
