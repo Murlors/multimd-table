@@ -11,7 +11,7 @@ import remark from "../src/remark.js";
 import marked from "../src/marked.js";
 import markdownIt from "../src/markdown-it.js";
 import { contractHash } from "./contracts.js";
-import golden from "./fixtures/core-contracts.json" with { type: "json" };
+import golden from "../../../contracts/core-contracts.json" with { type: "json" };
 
 test("scanner allocates lazily, disposes idempotently and leaves returned models independent", () => {
   const scanner = new TableScanner();

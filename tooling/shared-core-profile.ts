@@ -15,18 +15,18 @@ const nativePath = "crates/core/target/release/examples/profile";
 const bindings = "crates/core/bindings";
 const paths = [
   "crates/core/target/wasm32-unknown-unknown/release/multimd_table_core.wasm",
-  "dist/core.js",
+  "packages/js/dist/core.js",
   "crates/core/Cargo.lock",
   "tooling/shared-core-profile.ts",
   "tooling/performance/corpus.ts",
   "tooling/performance/report.ts",
-  "src/internal/wasm.mjs",
-  "src/internal/wire.mjs",
+  "packages/js/src/internal/wasm.mjs",
+  "packages/js/src/internal/wire.mjs",
   ...["backend.js", "loader.js", "core.wasm", "wasm.mjs", "wire.mjs"].map(
-    (name) => `dist/internal/${name}`,
+    (name) => `packages/js/dist/internal/${name}`,
   ),
 ];
-if (writer) paths.push("dist/writer.js");
+if (writer) paths.push("packages/js/dist/writer.js");
 assert.ok(
   !writer || !args.includes("--native-only"),
   "Native writer profiling is not implemented; omit --native-only",
@@ -44,11 +44,13 @@ const fingerprints = () =>
   );
 if (args[0] === "--worker") {
   const { core } = await import(pathToFileURL(resolve(root, "crates/core/bindings/node.mjs")).href);
-  const { parseTable } = await import(pathToFileURL(resolve(root, "dist/core.js")).href);
+  const { parseTable } = await import(
+    pathToFileURL(resolve(root, "packages/js/dist/core.js")).href
+  );
   const fixture = fixtures.find((f) => f.id === args[1])!;
   const table = writer ? parseTable(fixture.source, fixture.options) : null;
   const { stringifyTable } = writer
-    ? await import(pathToFileURL(resolve(root, "dist/writer.js")).href)
+    ? await import(pathToFileURL(resolve(root, "packages/js/dist/writer.js")).href)
     : { stringifyTable: null };
   const publicCall = writer
     ? () => stringifyTable(table)

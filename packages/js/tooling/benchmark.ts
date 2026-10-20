@@ -5,13 +5,20 @@ import { cpus, release, totalmem } from "node:os";
 import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { fixtures } from "./performance/corpus.ts";
-import { compare, milliseconds, validate, type Report } from "./performance/report.ts";
+import { fixtures } from "../../../tooling/performance/corpus.ts";
+import {
+  compare,
+  milliseconds,
+  validate,
+  type Report,
+} from "../../../tooling/performance/report.ts";
+import { version } from "./dependencies.ts";
 import type { Table } from "../src/core.js";
 import type { WriteTable } from "../src/writer.js";
 
 // Node 与 Bun 直接运行同一份脚本；所有入口及子进程均使用同一个仓库根目录。
-const root = fileURLToPath(new URL("../", import.meta.url));
+const root = fileURLToPath(new URL("../../../", import.meta.url));
+const packageRoot = resolve(root, "packages/js");
 const entry = fileURLToPath(import.meta.url);
 const profiles = {
   full: { profile: "full", warmupMs: 1000, batchMs: 40, batches: 7, trials: 3 },
@@ -42,7 +49,7 @@ function run(executable: string, args: string[], timeout = 60_000): string {
 }
 
 async function load(name: string) {
-  return import(pathToFileURL(resolve(root, "dist", `${name}.js`)).href);
+  return import(pathToFileURL(resolve(packageRoot, "dist", `${name}.js`)).href);
 }
 
 /** 每个工作负载/轮次独占新进程；准备输入、加载宿主和正确性检查均在计时之外。 */
@@ -157,7 +164,7 @@ async function main() {
   if (args[0] === "--compare") {
     assert.equal(args.length, 3, "Usage: vp run bench:compare BEFORE.json AFTER.json");
     const [before, after] = await Promise.all(
-      args.slice(1).map((path) => readFile(path, "utf8").then(JSON.parse)),
+      args.slice(1).map((path) => readFile(resolve(root, path), "utf8").then(JSON.parse)),
     );
     console.log(compare(before, after));
     return;
@@ -175,10 +182,12 @@ async function main() {
   assert.ok(output, "--out requires a path prefix");
   const modules: Record<string, string> = {};
   for (const name of ["core", "writer", "remark", "marked", "markdown-it"]) {
-    modules[name] = digest(await readFile(resolve(root, "dist", `${name}.js`)));
+    modules[name] = digest(await readFile(resolve(packageRoot, "dist", `${name}.js`)));
   }
   for (const name of ["backend.js", "loader.js", "core.wasm", "wasm.mjs", "wire.mjs"]) {
-    modules[`internal/${name}`] = digest(await readFile(resolve(root, "dist/internal", name)));
+    modules[`internal/${name}`] = digest(
+      await readFile(resolve(packageRoot, "dist/internal", name)),
+    );
   }
   const hosts: Record<string, string> = {};
   for (const name of [
@@ -190,14 +199,12 @@ async function main() {
     "marked",
     "markdown-it",
   ]) {
-    hosts[name] = JSON.parse(
-      await readFile(resolve(root, "node_modules", name, "package.json"), "utf8"),
-    ).version;
+    hosts[name] = await version(name);
   }
   const corpus = digest(
     JSON.stringify(fixtures) +
       (await readFile(entry, "utf8")) +
-      (await readFile(new URL("./performance/report.ts", import.meta.url), "utf8")),
+      (await readFile(new URL("../../../tooling/performance/report.ts", import.meta.url), "utf8")),
   );
   for (const engine of runtime === "all" ? ["node", "bun"] : [runtime]) {
     const report: Report = {

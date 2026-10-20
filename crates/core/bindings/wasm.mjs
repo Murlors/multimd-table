@@ -5,4 +5,4 @@ export {
   flags,
   encodeWrite,
   expandSection,
-} from "../../../src/internal/wasm.mjs";
+} from "../../../packages/js/src/internal/wasm.mjs";

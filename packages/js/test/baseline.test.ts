@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "vite-plus/test";
 import { runtime } from "../src/internal/backend.js";
 import { cellBounds, parseTable, TableScanner, type Range, type Table } from "../src/core.js";
-import { fixtures } from "../tooling/performance/corpus.js";
+import { fixtures } from "../../../tooling/performance/corpus.js";
 afterEach(() => runtime.disposeScanners());
 
 /** 慢速参考扫描：逐字符识别转义和匹配反引号，不共享生产扫描器的游标及缓存。 */

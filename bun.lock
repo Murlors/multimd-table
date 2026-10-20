@@ -3,7 +3,17 @@
   "configVersion": 1,
   "workspaces": {
     "": {
+      "name": "multimd-table-workspace",
+      "devDependencies": {
+        "@types/bun": "^1.4.3",
+        "typescript": "^6.0.3",
+        "vite": "catalog:",
+        "vite-plus": "catalog:",
+      },
+    },
+    "packages/js": {
       "name": "multimd-table",
+      "version": "0.4.0",
       "dependencies": {
         "@types/mdast": "^4.0.4",
         "@types/unist": "^3.0.3",
@@ -12,7 +22,6 @@
       "devDependencies": {
         "@arethetypeswrong/core": "^0.18.5",
         "@mdx-js/mdx": "3.1.1",
-        "@types/bun": "^1.4.3",
         "@types/mdx": "^2.0.14",
         "@types/react": "^19.3.0",
         "@types/react-dom": "^19.3.0",
@@ -32,10 +41,7 @@
         "remark-math": "^6.0.0",
         "remark-parse": "^11.0.0",
         "remark-rehype": "^11.1.2",
-        "typescript": "^6.0.3",
         "unified": "^11.0.5",
-        "vite": "catalog:",
-        "vite-plus": "catalog:",
       },
       "peerDependencies": {
         "markdown-it": "^15.0.0",
@@ -55,10 +61,6 @@
       "dependencies": {
         "markdown-it": "catalog:",
         "multimd-table-release": "npm:multimd-table@0.4.0",
-      },
-      "devDependencies": {
-        "vite": "catalog:",
-        "vite-plus": "catalog:",
       },
     },
   },
@@ -581,6 +583,8 @@
     "mrmime": ["mrmime@2.0.1", "", {}, "sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ=="],
 
     "ms": ["ms@2.1.3", "", {}, "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA=="],
+
+    "multimd-table": ["multimd-table@workspace:packages/js"],
 
     "multimd-table-playground": ["multimd-table-playground@workspace:playground"],
 

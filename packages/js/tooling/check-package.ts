@@ -5,8 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "vite-plus";
+import { version } from "./dependencies.ts";
 
-const root = fileURLToPath(new URL("../", import.meta.url));
+const root = fileURLToPath(new URL("../../../", import.meta.url));
+const packageRoot = join(root, "packages/js");
 const temporary = await mkdtemp(join(tmpdir(), "multimd-package-"));
 const bun = process.execPath;
 const firstImports: Record<string, unknown> = {};
@@ -29,12 +31,6 @@ function run(command: string[], cwd: string): string {
     throw new Error(`${command[1] ?? command[0]} failed (${result.exitCode}): ${diagnostic}`);
   }
   return output;
-}
-
-/** 从本地已验证工具链读取精确版本，消费者安装不链接开发仓库的 node_modules。 */
-async function version(name: string): Promise<string> {
-  return JSON.parse(await readFile(join(root, "node_modules", name, "package.json"), "utf8"))
-    .version;
 }
 
 async function json(path: string, value: unknown) {
@@ -283,7 +279,7 @@ const consumers = {
 try {
   // 调用方先构建；ignore-scripts 防止发布生命周期再次调用本门禁形成递归。
   const archive = join(temporary, "package.tgz");
-  run([bun, "pm", "pack", "--ignore-scripts", "--filename", archive], root);
+  run([bun, "pm", "pack", "--ignore-scripts", "--filename", archive], packageRoot);
   const entries = run(["tar", "-tzf", archive], root).trim().split("\n");
   const files = new Set(entries.filter((entry) => !entry.endsWith("/")));
   for (const entry of entries) {
@@ -415,7 +411,7 @@ console.log(JSON.stringify({ initializationMs, version: process.versions.bun ?? 
       const output = join(root, ".performance/package-browser");
       await mkdir(output, { recursive: true });
       for (const name of ["browser.mjs", "worker.mjs"])
-        await cp(join(root, "test/package", name), join(directory, name));
+        await cp(join(packageRoot, "test/package", name), join(directory, name));
       for (const worker of [false, true]) {
         await build({
           configFile: false,
@@ -440,7 +436,7 @@ console.log(JSON.stringify({ initializationMs, version: process.versions.bun ?? 
       }
       await cp(join(installed, "dist"), join(output, "package/dist"), { recursive: true });
       for (const name of ["index.html", "main.mjs"])
-        await cp(join(root, "test/package", name), join(output, name));
+        await cp(join(packageRoot, "test/package", name), join(output, name));
       console.log(`[package] browser bundles and unbundled package copied to ${output}`);
       // SSR 保持包外置，让 Node/Bun 从安装位置读取 WASM，不假设服务端输出会复制资产。
       await build({

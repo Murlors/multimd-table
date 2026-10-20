@@ -9,5 +9,5 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "tooling/**/*.ts", "vite.config.ts"]
+  "include": ["tooling/**/*.ts", "vite.config.ts"]
 }

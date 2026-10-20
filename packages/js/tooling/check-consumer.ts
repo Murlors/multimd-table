@@ -4,11 +4,11 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const root = resolve(import.meta.dir, "..");
+const root = resolve(import.meta.dir, "../../..");
 const [argument, ...tests] = process.argv.slice(2);
 assert.ok(
   argument && tests.length,
-  "Usage: bun tooling/check-consumer.ts <project> <test files...>",
+  "Usage: bun packages/js/tooling/check-consumer.ts <project> <test files...>",
 );
 const project = resolve(argument);
 const archive = join(root, ".performance/package-acceptance/package.tgz");

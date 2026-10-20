@@ -1,57 +1,16 @@
 import { defineConfig } from "vite-plus";
-import prepareWasm from "./tooling/prepare-wasm.ts";
+import { testProjects } from "./packages/js/vite.config.ts";
 
 export default defineConfig({
-  fmt: { ignorePatterns: ["test/fixtures/core-contracts.json"] },
-  lint: {
-    options: { typeAware: true, typeCheck: true },
+  defaultPackage: {
+    dev: "./playground",
+    build: "./playground",
+    preview: "./playground",
+    pack: "./packages/js",
   },
+  fmt: { ignorePatterns: ["contracts/core-contracts.json"] },
+  lint: { options: { typeAware: true, typeCheck: true } },
   test: {
-    projects: [
-      ...["production", "development"].map((condition) => ({
-        resolve: { conditions: ["module", "node", condition] },
-        ssr: { resolve: { conditions: ["module", "node", condition] } },
-        test: {
-          name: condition,
-          include: ["test/**/*.test.ts", "crates/core/bindings/transport.test.js"],
-          globalSetup: ["./tooling/prepare-wasm.ts"],
-          server: { deps: { inline: true as const } },
-        },
-      })),
-      "./playground/vite.config.ts",
-    ],
-  },
-  pack: {
-    entry: [
-      "src/core.ts",
-      "src/writer.ts",
-      "src/remark.ts",
-      "src/marked.ts",
-      "src/markdown-it.ts",
-      "src/types.ts",
-      "src/internal/backend.ts",
-      "src/internal/loader.ts",
-      "src/internal/wasm.mjs",
-      "src/internal/wire.mjs",
-    ],
-    unbundle: true,
-    platform: "neutral",
-    target: "es2022",
-    // 保留标识符，不引入需要额外发布的运行时命名辅助模块。
-    minify: { mangle: false },
-    failOnWarn: true,
-    publint: true,
-    attw: { profile: "esm-only", level: "error" },
-    tsconfig: "tsconfig.build.json",
-    deps: { neverBundle: [/\.mjs$/, /^node:/] },
-    outputOptions: {
-      entryFileNames: (chunk) =>
-        chunk.facadeModuleId?.endsWith(".mjs") ? "[name].mjs" : "[name].js",
-    },
-    copy: {
-      from: "src/internal/core.wasm",
-      to: "dist/internal",
-    },
-    hooks: { "build:prepare": prepareWasm },
+    projects: [...testProjects, "./playground/vite.config.ts"],
   },
 });

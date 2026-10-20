@@ -5,7 +5,7 @@ import {
   milliseconds,
   validate,
   type Report,
-} from "../tooling/performance/report.js";
+} from "../../../tooling/performance/report.js";
 
 function report(): Report {
   return {

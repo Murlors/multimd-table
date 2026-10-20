@@ -5,9 +5,5 @@
   "dependencies": {
     "markdown-it": "catalog:",
     "multimd-table-release": "npm:multimd-table@0.4.0"
-  },
-  "devDependencies": {
-    "vite": "catalog:",
-    "vite-plus": "catalog:"
   }
 }

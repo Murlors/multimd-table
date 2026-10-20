@@ -1,1 +1,1 @@
-export { Reader, encodeWrite } from "../../../src/internal/wire.mjs";
+export { Reader, encodeWrite } from "../../../packages/js/src/internal/wire.mjs";

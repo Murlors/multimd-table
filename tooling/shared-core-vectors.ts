@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { contractVectors } from "../test/contracts.js";
+import { contractVectors } from "../packages/js/test/contracts.js";
 import { fixtures } from "./performance/corpus.js";
 
 const root = resolve(import.meta.dir, "..");

@@ -1,9 +1,25 @@
 import { expect, test } from "vite-plus/test";
+import { readFileSync, realpathSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { evaluate } from "../src/document.ts";
 import { applyWritten, decodeState, encodeState } from "../src/state.ts";
 import { examples, initialOptions } from "../src/examples.ts";
 import { inputLimit } from "../src/limits.ts";
 import { parseTable } from "multimd-table-release";
+
+test("the demo resolves its pinned npm release instead of the local workspace", () => {
+  const entry = realpathSync(createRequire(import.meta.url).resolve("multimd-table-release"));
+  const workspace = realpathSync(fileURLToPath(new URL("../../packages/js", import.meta.url)));
+  expect(entry.startsWith(workspace + sep)).toBe(false);
+  const installed = JSON.parse(readFileSync(resolve(dirname(entry), "../package.json"), "utf8"));
+  const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  expect(installed.name).toBe("multimd-table");
+  expect(manifest.dependencies["multimd-table-release"]).toBe(
+    `npm:${installed.name}@${installed.version}`,
+  );
+});
 
 test("every published-package example parses, renders and writes back", () => {
   for (const example of examples) {

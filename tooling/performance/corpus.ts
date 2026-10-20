@@ -1,4 +1,4 @@
-import type { Options } from "../../src/core.js";
+import type { Options } from "../../packages/js/src/core.js";
 
 export interface Fixture {
   id: string;

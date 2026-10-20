@@ -20,7 +20,7 @@ jobs:
             args: ["--frozen-lockfile"]
       - run: vp -C playground check
       - run: vp -C playground test
-      - run: vp -C playground build
+      - run: vp build
       - uses: actions/upload-pages-artifact@v4
         with:
           path: playground/dist

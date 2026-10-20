@@ -3,8 +3,8 @@ import { createHash } from "node:crypto";
 import { parseTable, type Options } from "../src/core.js";
 import { stringifyTable } from "../src/writer.js";
 import { syntaxCases, optionCases } from "./cases.js";
-import { fixtures } from "../tooling/performance/corpus.js";
-import golden from "./fixtures/core-contracts.json" with { type: "json" };
+import { fixtures } from "../../../tooling/performance/corpus.js";
+import golden from "../../../contracts/core-contracts.json" with { type: "json" };
 
 /** 忽略对象属性插入顺序，数组与 UTF-16 字符串仍按原样参与摘要。 */
 export const contractHash = (value: unknown) =>

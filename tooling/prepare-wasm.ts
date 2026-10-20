@@ -22,7 +22,7 @@ export default async function prepareWasm(): Promise<void> {
   const bytes = await readFile(
     resolve(root, "crates/core/target/wasm32-unknown-unknown/release/multimd_table_core.wasm"),
   );
-  const path = resolve(root, "src/internal/core.wasm");
+  const path = resolve(root, "packages/js/src/internal/core.wasm");
   const previous = await readFile(path).catch((error: NodeJS.ErrnoException) => {
     if (error.code !== "ENOENT") throw error;
     return Buffer.alloc(0);

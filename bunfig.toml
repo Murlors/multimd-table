@@ -1,0 +1,3 @@
+[install]
+# Playground 必须使用固定的 npm 发布版，不能被同名工作区自动替换。
+linkWorkspacePackages = false
