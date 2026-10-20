@@ -160,3 +160,64 @@ editing, save/reopen, merged cells, references, HTML handling and Worker result
 coordination. This was package-based local testing, not an update or deployment
 of Noumi's installed dependency. Browser Worker module loading is checked by the
 separate packed-package page.
+
+## Playground
+
+[Open the Playground](https://murlors.github.io/multimd-table/). The static site
+uses the published `multimd-table@0.4.0` package. Try merged
+cells, multiline content, headerless tables and escaping; switch between rendered
+Markdown, the complete model and canonical writer output. Parser options update
+live. You can copy results, apply written Markdown without losing the rest of the
+document, or share an example through a URL fragment.
+
+```sh
+vp install
+vp -C playground dev
+```
+
+Open `http://127.0.0.1:4173`. Vite updates the page as sources change. No Rust toolchain is needed. Parsing and rendering run in a
+browser Worker; input is not uploaded. Preview runs in a sandbox with scripts and
+remote content disabled. Share links contain their Markdown, so only share input
+you intend others to read.
+
+Run `vp -C playground check`, `vp -C playground test` and `vp -C playground build`
+for static checks, boundary tests and a production build. The deployable files are in `playground/dist/`; their relative asset URLs
+also work under a project subdirectory. Serve them with any static host.
+
+The public site is hosted on GitHub Pages. The **Playground** workflow builds the
+pinned npm release and deploys `playground/dist/` when manually run on `main`.
+Pushes and pull requests validate the project without changing the public site.
+When updating the demo, change its npm release pin and displayed version together,
+then test, build and run the deployment workflow.
+
+## Development
+
+Use Vite+ with the latest Node.js LTS (`vp env default lts`) and the Bun version
+declared in `packageManager`. Vite+ and shared markdown-it versions are declared
+in the root catalog; CI reads the same toolchain version and uses Node.js LTS.
+Run `vp install` once at the repository root. Core development also requires
+Rust and the `wasm32-unknown-unknown` target
+(`rustup target add wasm32-unknown-unknown`).
+
+| Command                 | Purpose                                                                                 |
+| ----------------------- | --------------------------------------------------------------------------------------- |
+| `vp check`              | Format, lint and type checks across the repository                                      |
+| `vp test`               | Library/transport tests in production and development conditions, plus Playground tests |
+| `vp pack`               | ESM entry points and declarations, checked by publint and Are the Types Wrong           |
+| `vp -C playground dev`  | Playground with live updates                                                            |
+| `vp run verify`         | Complete gate: static checks, Rust/tests, both builds and isolated package consumers    |
+| `vp run verify:package` | Build and validate only the actual tarball in Node, Bun, TypeScript and browser bundles |
+
+Tests and packaging share one Rust/WASM preparation function. Filter tests with
+`vp test --project production`, `--project development` or `--project playground`.
+Run `vp check` before committing; CI and package creation run the complete gate.
+Verification and performance measurements always execute without task caching.
+Formatting and lint rules use Oxfmt/Oxlint defaults with type-aware checks enabled.
+The frozen compatibility fixture is excluded from formatting.
+Declaration generation currently uses the TypeScript 6 compiler API; adopting
+TypeScript 7 requires compatible declaration tooling.
+
+`vp run bench --out .performance/baseline` measures the core, writer and adapters
+on Node and Bun. The same TypeScript runner executes directly in both runtimes.
+See [Performance](#performance) for workloads and comparisons, and the sections above for cross-language
+checks and the packed-package browser acceptance page.

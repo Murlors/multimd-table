@@ -1,36 +1,66 @@
 # multimd-table
 
 [![npm version](https://img.shields.io/npm/v/multimd-table?logo=npm)](https://www.npmjs.com/package/multimd-table)
+[![Playground: Try online](https://img.shields.io/badge/%E2%96%B6_Playground-Try_online-6366f1)](https://murlors.github.io/multimd-table/)
 
-**Parse, render, and write rich Markdown tables.**
+**Merged cells for your Markdown stack.**
 
-A JavaScript/TypeScript toolkit for MultiMarkdown tables with merged cells,
-captions, multiple header and body sections, and multiline Markdown.
+Use MultiMarkdown syntax for row spans, column spans, grouped headers and multiline
+cells. Render tables with your existing Markdown stack, extract structured data,
+or write table data back to Markdown.
 
-The parser and writer share a Rust core compiled to WebAssembly, with synchronous
-JavaScript APIs and TypeScript declarations.
+[Integrations](#integrations) · [API reference](docs/api.md)
 
-- **Parse:** get structured data, source ranges, and merged-cell origins from a
-  standalone core.
-- **Render:** integrate with remark, Marked, or markdown-it; use the remark
-  adapter with react-markdown and MDX.
-- **Write:** generate table Markdown from structured data with span validation.
+## Install
 
-[API reference](https://github.com/Murlors/multimd-table/blob/main/docs/api.md) · [Live Playground](https://murlors.github.io/multimd-table/)
+```sh
+bun add multimd-table
+```
 
-If you find multimd-table useful, please consider [giving it a star on GitHub](https://github.com/Murlors/multimd-table).
+ESM only, with TypeScript declarations. The included Rust/WASM core initializes
+on import; calls are synchronous afterward. Consumers do not need Rust.
+See [runtime requirements](#compatibility) before bundling.
 
-```markdown
+## Quick start
+
+Parse a table without a framework or renderer:
+
+```ts
+import { parseTable } from "multimd-table";
+
+const source = `| Region | Q1 | Q2 |
+| ------ | -- | -- |
+| North  | 12 | 15 |
+| ^^     |  8 | 10 |
+| Total      || 45 |
+`;
+
+const table = parseTable(source, { rowspan: true });
+const body = table?.sections.find((section) => section.kind === "body");
+if (body) {
+  console.log(body.rows[0].cells[0].rowspan); // 2: North spans two rows
+  console.log(body.rows[2].cells[0].colspan); // 2: Total spans two columns
+}
+```
+
+The core returns structured data. To render a complete Markdown document,
+choose an [integration](#integrations) below.
+
+## See it in Markdown
+
+`||` extends a cell to the right; `^^` continues the cell above when
+`rowspan: true`. Here is a table with grouped headers and merged row labels:
+
+```text
 [Quarterly sales]
 | Region | Team | Sales ||
+| ^^     | ^^   | Q1 | Q2 |
+| ------ | ---- | -- | -- |
+| North  | A    | 12 | 15 |
+| ^^     | B    |  8 | 10 |
 
-| ^^    | ^^  | Q1  | Q2  |
-| ----- | --- | --- | --- |
-| North | A   | 12  | 15  |
-| ^^    | B   | 8   | 10  |
-
-| South | C | 9 | 11 |
-| Total ||| 65 |
+| South  | C    |  9 | 11 |
+| Total         ||| 65 |
 ```
 
 With `{ rowspan: true }`:
@@ -51,373 +81,101 @@ With `{ rowspan: true }`:
   </tbody>
 </table>
 
-`^^` extends the cell above; adjacent pipes (`||`) extend the cell to the left.
 The caption labels the table, and the blank line separates its body groups.
+This syntax needs a multimd-table adapter to render in your app; copying it into
+a standard Markdown renderer does not enable merged cells.
 
-## Install
+## Integrations
 
-```sh
-bun add multimd-table
-```
+Choose the entry for your renderer, or use the core and writer directly.
+Each guide includes imports, required peers and a working example.
 
-ESM only, with TypeScript declarations. Install the host and optional peers for
-the adapter you use. The core and writer have no external JavaScript runtime
-peers; the package includes its compiled `.wasm` file, so consumers do not need Rust.
+| Use with                                      | Entry                       | Guide                                                 |
+| --------------------------------------------- | --------------------------- | ----------------------------------------------------- |
+| <a id="react-markdown"></a>react-markdown     | `multimd-table/remark`      | [React example](docs/api.md#react-markdown)           |
+| <a id="remark--unified"></a>remark / unified  | `multimd-table/remark`      | [Render to HTML](docs/api.md#remark--unified)         |
+| <a id="mdx"></a>MDX                           | `multimd-table/remark`      | [Compile MDX](docs/api.md#mdx)                        |
+| <a id="marked"></a>Marked                     | `multimd-table/marked`      | [Marked example](docs/api.md#marked)                  |
+| <a id="markdown-it"></a>markdown-it           | `multimd-table/markdown-it` | [markdown-it example](docs/api.md#markdown-it)        |
+| <a id="standalone-core"></a>Structured data   | `multimd-table`             | [Parse and expand cells](docs/api.md#standalone-core) |
+| <a id="standalone-writer"></a>Markdown output | `multimd-table/writer`      | [Write a table](docs/api.md#standalone-writer)        |
 
-| Entry                       | Host / peers                                |
-| --------------------------- | ------------------------------------------- |
-| `multimd-table`             | None at runtime                             |
-| `multimd-table/writer`      | None at runtime                             |
-| `multimd-table/remark`      | `unified` 11, `mdast-util-from-markdown` 2  |
-| `multimd-table/marked`      | `marked` 18 (Node.js 20+ when used in Node) |
-| `multimd-table/markdown-it` | `markdown-it` 15                            |
+<a id="why-multimd-table"></a>
 
-The ESM import automatically loads and initializes the WASM core. No manual
-`init()` call or resource path is required. APIs remain synchronous after import:
-
-```ts
-import { parseTable } from "multimd-table";
-
-const table = parseTable("A|B\n-|-\nhello|world");
-```
-
-Node and Bun read the file from the installed package. Browsers and module Workers
-load it relative to the JavaScript module; serve the complete package or let an
-asset-aware bundler such as Vite handle the URL. A bundler may emit the WASM as a
-separate resource or inline it in its output; both forms are supported. The npm
-package itself contains one binary, with no Base64 copy.
-
-Module initialization uses top-level `await`, so bundled output must support
-ES2022 modules. With Vite Workers, use `worker: { format: "es" }`. For Node SSR,
-keep `multimd-table` external, as Vite does by default: the installed package
-owns its WASM resource. Bundlers that do not process `new URL(..., import.meta.url)`
-assets must preserve the module-relative file layout; arbitrary fully bundled SSR,
-classic Workers and edge runtimes are not covered by this loading path.
-
-Initialization has a cost separate from parsing throughput. Browsers and Workers
-need WebAssembly support and permission to fetch the same-origin WASM resource.
-Apps with CSP must allow WASM compilation, for example with `wasm-unsafe-eval` in
-`script-src` ([WebAssembly compilation and CSP](https://developer.mozilla.org/en-US/docs/WebAssembly/Reference/JavaScript_interface/Module/Module)).
-When bundling remark in a Web Worker, select the `worker` export condition so its
-entity decoder uses the document-free implementation.
-
-## react-markdown
-
-```sh
-bun add react react-dom react-markdown remark-gfm unified mdast-util-from-markdown
-```
-
-```tsx
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkMultimdTable from "multimd-table/remark";
-
-const source = "A|B\n-|-\nmerged||\n^^||";
-
-<ReactMarkdown remarkPlugins={[remarkGfm, [remarkMultimdTable, { rowspan: true }]]}>
-  {source}
-</ReactMarkdown>;
-```
-
-Place this plugin **after `remarkGfm`** when using both. GFM is optional and
-supplies features such as strikethrough and footnotes. `rehype-raw` is not
-required for these tables.
-
-## remark / unified
-
-```sh
-bun add unified remark-parse remark-gfm remark-rehype rehype-stringify mdast-util-from-markdown
-```
-
-```ts
-import { unified } from "unified";
-import remarkParse from "remark-parse";
-import remarkGfm from "remark-gfm";
-import remarkRehype from "remark-rehype";
-import rehypeStringify from "rehype-stringify";
-import remarkMultimdTable from "multimd-table/remark";
-
-const html = String(
-  unified()
-    .use(remarkParse)
-    .use(remarkGfm)
-    .use(remarkMultimdTable, { rowspan: true })
-    .use(remarkRehype)
-    .use(rehypeStringify)
-    .processSync("A|B\n-|-\nmerged||\n^^||"),
-);
-```
-
-## Marked
-
-```sh
-bun add marked
-```
-
-```ts
-import { Marked } from "marked";
-import markedMultimdTable from "multimd-table/marked";
-
-const parser = new Marked(markedMultimdTable({ rowspan: true, multiline: true }));
-const html = parser.parse("A|B\n-|-\nmerged||\n^^||", { async: false });
-```
-
-Cells use the document's lexer, renderer, extensions and `walkTokens`, including
-async callbacks. Container continuation follows Marked's native table behavior.
-
-## markdown-it
-
-```sh
-bun add markdown-it
-```
-
-```ts
-import MarkdownIt from "markdown-it";
-import markdownItMultimdTable from "multimd-table/markdown-it";
-
-const parser = new MarkdownIt().use(markdownItMultimdTable, {
-  rowspan: true,
-  multiline: true,
-});
-const html = parser.render("A|B\n-|-\nmerged||\n^^||");
-```
-
-Renderer rules and table enable/disable settings are preserved. With the
-CommonMark preset, call `.enable("table")` to enable tables.
-
-## MDX
-
-```sh
-bun add @mdx-js/mdx remark-gfm unified mdast-util-from-markdown
-```
-
-```ts
-import { compile } from "@mdx-js/mdx";
-import remarkGfm from "remark-gfm";
-import remarkMultimdTable from "multimd-table/remark";
-
-const result = await compile("A|B\n-|-\n{1 + 1}|note\n^^|next", {
-  remarkPlugins: [remarkGfm, [remarkMultimdTable, { rowspan: true }]],
-});
-```
-
-JSX and expressions inside cells follow MDX's syntax and runtime. MDX bundler
-integrations use the same `remarkPlugins` configuration.
-
-## Standalone core
-
-```ts
-import { parseTable, expandSection } from "multimd-table";
-
-const table = parseTable("A|B\n-|-\nmerged||\n^^||", { rowspan: true });
-if (table) {
-  const body = table.sections.find((section) => section.kind === "body");
-  const grid = body ? expandSection(body) : [];
-  // grid[1][0].value === "merged"
-  // grid[1][0].origin === grid[0][0].origin
-  // grid[1][0].inherited === true
-}
-```
-
-First body cell (selected fields):
-
-```json
-{
-  "value": "merged",
-  "column": 0,
-  "colspan": 2,
-  "rowspan": 2,
-  "range": { "start": 8, "end": 14 }
-}
-```
-
-`parseTable` recognizes one table **at the start of the string**, stopping at the
-first rejected line. Cell values remain Markdown strings. Use an adapter for
-whole documents: the core does not handle outer fences, lists or block quotes.
-
-## Standalone writer
-
-```ts
-import { stringifyTable } from "multimd-table/writer";
-
-const source = stringifyTable({
-  columns: [{ align: null }, { align: "right" }],
-  sections: [
-    {
-      kind: "body",
-      rows: [
-        { cells: [{ column: 0, colspan: 2, rowspan: 2, value: "Merged" }] },
-        { cells: [] }, // Covered by the cell above.
-      ],
-    },
-  ],
-});
-```
-
-Generated Markdown:
-
-```markdown
-|---|---:|
-| Merged ||
-| ^^ ||
-```
-
-The writer accepts Markdown strings and a grid without source ranges. It emits
-canonical table syntax, validates complete span coverage, and preserves
-Markdown semantics rather than source whitespace. Read the output with
-`{ rowspan: true, multiline: true, headerless: true, multibody: true }`.
-Unrepresentable content throws `RangeError`; see the
-[writer contract](docs/api.md#writer-multimd-tablewriter) before integrating an editor.
+Use the adapters when your documents need merged cells, captions or block content
+inside tables. The standalone core gives data-processing and editor code access
+to cell values, UTF-16 source ranges and shared merged-cell origins. The writer
+validates span coverage and rejects content it cannot represent.
 
 ## Syntax
 
-- **Column span:** adjacent pipes, e.g. `Total||27`. Always enabled; retain trailing
-  pipes when the span reaches the row's end.
-- **Row span:** `^^` with `rowspan: true`; spans stay within a header/body section.
-- **Empty cell:** whitespace between pipes, e.g. `A| |C`. `A||C` is a span.
-- Outer pipes are optional. Escape literal pipes as `\|`; pipes inside code spans
-  with matching backtick delimiters do not split cells. Unclosed backticks are literal.
-- Delimiters accept `---` or `===`. Use `:---`, `---:` or `:---:` for alignment;
-  append `+` to give the column an `extend` class for your stylesheet.
-- All rows before the delimiter are headers. With `headerless: true`, start with
-  the delimiter followed by a body row.
-- Put `[Caption]` immediately before or after the table. The first caption wins;
-  a second stays outside. Inline Markdown is supported. `[Caption][label]` gives
-  an explicit ID; otherwise `autolabel` generates one. IDs are lowercased with
-  non-word characters removed.
+| Write                    | Result                                     | Option            |
+| ------------------------ | ------------------------------------------ | ----------------- |
+| `Total\|\|45`            | Merge adjacent columns                     | Always enabled    |
+| `^^`                     | Continue the cell above                    | `rowspan: true`   |
+| `[Caption]`              | Label the table                            | Always enabled    |
+| Backslash at end of line | Continue a row with multiline cell content | `multiline: true` |
 
-With `multiline: true`, a backslash at the physical end of a line continues the
-row. End the final line without a backslash:
+<a id="options"></a>
 
-```markdown
-| Task   | Notes   |
-| ------ | ------- |
-| Launch | - Build | \   |
-|        | - Test  |
-```
+Row spans and multiline content are opt-in. A blank line between body rows starts
+another body section by default. See [syntax and options](docs/api.md#syntax)
+for escaping, headerless tables and all defaults.
 
-This is one body row with **Launch** and a two-item list. Joined cells support
-block Markdown, including paragraphs, lists and code. Keep columns aligned and
-do not put whitespace after the continuation backslash.
+## Compatibility
 
-With `multibody: true`, one blank line between body rows starts another `tbody`;
-two end the table. A blank line immediately after the delimiter ends the table
-before its first body row. With `multibody: false`, any blank line ends the table.
+<a id="limitations"></a>
+<a id="rendering-and-compatibility"></a>
 
-## Options
+- **Rendering:** this is extended Markdown syntax. Use an adapter to render whole
+  documents; the standalone parser reads one table at the start of its input.
+  Custom renderers and sanitizers must preserve `rowSpan` and `colSpan`.
+- **Runtime:** ESM initialization uses top-level `await`. Bundled output must
+  support ES2022 modules and retain the WASM resource. Browsers need WebAssembly;
+  CSP must allow its compilation. See [bundlers, SSR and Workers](docs/api.md#runtime-and-bundlers)
+  for supported loading paths.
 
-The core and all adapters accept the same options:
+## Documentation
 
-| Option       | Default | Effect                                                     |
-| ------------ | ------- | ---------------------------------------------------------- |
-| `rowspan`    | `false` | Recognize `^^` as an upward continuation.                  |
-| `multiline`  | `false` | Join backslash-ended rows and parse their cells as blocks. |
-| `headerless` | `false` | Allow a table to start with its delimiter.                 |
-| `multibody`  | `true`  | Allow one blank line between body sections.                |
-| `autolabel`  | `true`  | Generate an ID for an unlabeled caption.                   |
+<a id="api"></a>
 
-## API
-
-| Core export                    | Result                                                                    |
-| ------------------------------ | ------------------------------------------------------------------------- |
-| `parseTable(source, options?)` | Leading `Table`, or `null`                                                |
-| `expandSection(section)`       | Rectangular grid with `origin`, `inherited` and `null` holes              |
-| `TableScanner`                 | Incremental parsing with `push(line, offset)`, `finish()` and `dispose()` |
-| `cellBounds(line)`             | UTF-16 pipe boundaries                                                    |
-| `defaults`                     | Read-only option defaults                                                 |
-
-Adapters use default imports; core functions and types use named imports. See
-the [API reference](https://github.com/Murlors/multimd-table/blob/main/docs/api.md)
-for scanner state, source ranges, models and host-specific node/token types.
-
-Adapters release their own scanners on completion and failure. Direct scanner
-users must release the Rust state after their last snapshot:
-
-```ts
-import { TableScanner } from "multimd-table";
-
-const scanner = new TableScanner();
-try {
-  scanner.push("A|B", 0);
-  scanner.push("-|-", 4);
-  const table = scanner.finish();
-} finally {
-  scanner.dispose();
-}
-```
-
-## Rendering and compatibility
-
-Custom components and sanitizers must retain the features you use: `rowSpan`,
-`colSpan`, cell `text-align`, the `extend` class, and `caption` with its `id` and
-bottom `caption-side`. Cell HTML and URLs follow the host's policies.
-
-Cell Markdown, source normalization and container boundaries follow the host.
-
-Marked 18.1.1's native Setext-heading detection is slow on Bun 1.4.3 for long lists
-with many continuation lines, even without tables. Use Node or another adapter
-for that workload.
+- [API reference](docs/api.md) — models, scanner lifecycle, adapters and writer contract.
+- [Syntax reference](docs/api.md#syntax) — merged cells, captions, multiline content and options.
+- [Validation and benchmarks](docs/baselines.md) — correctness checks, workloads and measurement methodology.
 
 ## Playground
 
-[Open the Playground](https://murlors.github.io/multimd-table/). The static site
-uses the published `multimd-table@0.4.0` package. Try merged
-cells, multiline content, headerless tables and escaping; switch between rendered
-Markdown, the complete model and canonical writer output. Parser options update
-live. You can copy results, apply written Markdown without losing the rest of the
-document, or share an example through a URL fragment.
+[Try the Playground](https://murlors.github.io/multimd-table/) to edit Markdown,
+preview tables, inspect the parsed model and generate canonical Markdown.
+It uses the published `multimd-table@0.4.0` package.
 
-```sh
-vp install
-vp -C playground dev
-```
-
-Open `http://127.0.0.1:4173`. Vite updates the page as sources change. No Rust toolchain is needed. Parsing and rendering run in a
-browser Worker; input is not uploaded. Preview runs in a sandbox with scripts and
-remote content disabled. Share links contain their Markdown, so only share input
-you intend others to read.
-
-Run `vp -C playground check`, `vp -C playground test` and `vp -C playground build`
-for static checks, boundary tests and a production build. The deployable files are in `playground/dist/`; their relative asset URLs
-also work under a project subdirectory. Serve them with any static host.
-
-The public site is hosted on GitHub Pages. The **Playground** workflow builds the
-pinned npm release and deploys `playground/dist/` when manually run on `main`.
-Pushes and pull requests validate the project without changing the public site.
-When updating the demo, change its npm release pin and displayed version together,
-then test, build and run the deployment workflow.
+Input is processed in your browser. Share links include their Markdown, so only
+share content you intend others to read.
+[Local setup and deployment](docs/baselines.md#playground).
 
 ## Development
 
-Use Vite+ with the latest Node.js LTS (`vp env default lts`) and the Bun version
-declared in `packageManager`. Vite+ and shared markdown-it versions are declared
-in the root catalog; CI reads the same toolchain version and uses Node.js LTS.
-Run `vp install` once at the repository root. Core development also requires
-Rust and the `wasm32-unknown-unknown` target
-(`rustup target add wasm32-unknown-unknown`).
+Use Vite+, the Bun version in `packageManager`, Rust and the
+`wasm32-unknown-unknown` target.
 
-| Command                 | Purpose                                                                                 |
-| ----------------------- | --------------------------------------------------------------------------------------- |
-| `vp check`              | Format, lint and type checks across the repository                                      |
-| `vp test`               | Library/transport tests in production and development conditions, plus Playground tests |
-| `vp pack`               | ESM entry points and declarations, checked by publint and Are the Types Wrong           |
-| `vp -C playground dev`  | Playground with live updates                                                            |
-| `vp run verify`         | Complete gate: static checks, Rust/tests, both builds and isolated package consumers    |
-| `vp run verify:package` | Build and validate only the actual tarball in Node, Bun, TypeScript and browser bundles |
+```sh
+git clone https://github.com/Murlors/multimd-table.git
+cd multimd-table
+vp install
+vp run verify
+```
 
-Tests and packaging share one Rust/WASM preparation function. Filter tests with
-`vp test --project production`, `--project development` or `--project playground`.
-Run `vp check` before committing; CI and package creation run the complete gate.
-Verification and performance measurements always execute without task caching.
-Formatting and lint rules use Oxfmt/Oxlint defaults with type-aware checks enabled.
-The frozen compatibility fixture is excluded from formatting.
-Declaration generation currently uses the TypeScript 6 compiler API; adopting
-TypeScript 7 requires compatible declaration tooling.
+The full check covers static checks, Rust and JavaScript tests, builds and isolated
+package consumers. See [development commands](docs/baselines.md#development)
+for focused checks and Playground development.
 
-`vp run bench --out .performance/baseline` measures the core, writer and adapters
-on Node and Bun. The same TypeScript runner executes directly in both runtimes.
-See the [baseline guide](docs/baselines.md) for workloads, comparisons, cross-language
-checks and the packed-package browser acceptance page.
+## Feedback and support
+
+[Report an issue](https://github.com/Murlors/multimd-table/issues) with the Markdown
+input, options, adapter, package version and expected output. A public Playground
+share link makes examples easier to reproduce.
+
+If multimd-table helps your project, [consider starring it on GitHub](https://github.com/Murlors/multimd-table).
 
 ## License
 
