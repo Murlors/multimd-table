@@ -92,7 +92,7 @@ uses one process, 100 ms warmup and three batches targeting 15 ms; it checks the
 measurement path, not release performance.
 
 Reports record runtime/host versions, OS/architecture/CPU, revision, dirty state,
-module hashes (including the embedded WASM and binding), corpus/runner fingerprint and measurement settings. Comparisons reject
+module hashes (including the WASM file, loader and binding), corpus/runner fingerprint and measurement settings. Comparisons reject
 different environments, profiles, fixtures or workload sets. Code/module hashes may
 change, as expected when comparing implementations. A changed corpus or runner needs
 a new baseline. Runtime startup and cold-start performance, retained heap and peak
@@ -132,6 +132,10 @@ Serve the repository over local HTTP and open
 bundled host adapters, Unicode, large source offsets and a real module Worker.
 The fixture CSP permits only same-origin scripts and WASM compilation. Worker
 bundles select the `worker` condition for document-free entity decoding.
+The page covers the unbundled external WASM file and bundler-inlined WASM under
+that CSP. Node SSR acceptance keeps the package external so its binary resolves
+inside the installed package. Fully bundled SSR needs bundler-specific asset
+handling and is not a supported zero-configuration path.
 
 A consumer's existing Bun tests can run against that exact tarball:
 

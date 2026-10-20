@@ -5,6 +5,14 @@ entry points retain synchronous calls and TypeScript models. The former TS
 parser/writer and dual-backend benchmark tools have been removed. Python and Go
 bindings remain integration probes rather than published language packages.
 
+The npm package ships one standalone `core.wasm`. Module import loads and
+initializes it automatically; Node/Bun read the installed file and browsers fetch
+the module-relative URL. Public calls remain synchronous after that asynchronous
+ESM initialization. Release builds strip symbol metadata and use speed-oriented
+optimization. Bridge modules are minified by the same Vite+ pack pipeline as the
+public entries. Caption identifier normalization retains the standard Unicode
+lowercase implementation.
+
 Browser and Node/Bun call the same WASM build; Python and Go integration probes
 call the native build through its C ABI. `expandSection` remains a small
 host-side utility so JavaScript `origin` references retain object identity.
@@ -49,7 +57,7 @@ parser implementation. See [the baseline guide](../../docs/baselines.md).
 
 - Ten transport tests independently specify the wire format, truncation,
   little-endian UTF-16, surrogate handling, source lookup and buffer ownership.
-- The 311 package tests cover grammar, all three adapters, React, MDX, source
+- The package tests cover grammar, all three adapters, React, MDX, source
   positions, writing, independent snapshots and deterministic native cleanup.
 - `test/fixtures/core-contracts.json` freezes results obtained from the former TS
   implementation before its removal. It contains reviewed SHA-256 summaries of
@@ -60,8 +68,9 @@ parser implementation. See [the baseline guide](../../docs/baselines.md).
   not an automatically regenerated snapshot of the current implementation.
 - `core:check` verifies those frozen contracts before exporting the same complete
   models and successful writer results to the Python and Go native probes.
-- Eight Rust tests cover snapshots, rejection, mixed line endings, truncated or
-  unaligned writer requests, invalid lengths and owned native result lifetimes.
+- Thirteen Rust tests cover snapshots, rejection, mixed line endings, truncated or
+  unaligned writer requests, owned native result lifetimes and writer syntax
+  boundaries (HTML, autolinks, Unicode whitespace, fences and captions).
 - `check:package` generates `/.performance/package-browser/index.html` from the
   actual installed tarball. Serve the repository over local HTTP to validate
   synchronous APIs, all adapters, Unicode, offsets and a real module Worker.
@@ -102,6 +111,12 @@ JSON output streams values from those segments; JS slices its original strings.
 Returned host models still contain all values, arrays and ranges as before.
 Physical rows index a shared boundary arena. A small inline scratch buffer scans
 ordinary rows without allocating; wide rows spill into a temporary vector.
+
+The writer's fixed HTML, autolink, container, fence and caption checks scan those
+UTF-16 units directly in `src/writer/syntax.rs`. They preserve the existing
+escaping and rejection rules without a regex engine, runtime pattern compilation
+or shadow-text allocation. They only recognize the boundaries needed for safe
+table serialization; full cell Markdown interpretation stays with the host.
 
 Python and Go receive UTF-8 JSON with isolated surrogates explicitly escaped.
 JS receives a compact binary structure containing source segments and derives

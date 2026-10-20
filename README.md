@@ -16,7 +16,7 @@ JavaScript APIs and TypeScript declarations.
   adapter with react-markdown and MDX.
 - **Write:** generate table Markdown from structured data with span validation.
 
-[API reference](https://github.com/Murlors/multimd-table/blob/main/docs/api.md) · [Playground](#playground)
+[API reference](https://github.com/Murlors/multimd-table/blob/main/docs/api.md) · [Live Playground](https://murlors.github.io/multimd-table/)
 
 If you find multimd-table useful, please consider [giving it a star on GitHub](https://github.com/Murlors/multimd-table).
 
@@ -62,7 +62,7 @@ bun add multimd-table
 
 ESM only, with TypeScript declarations. Install the host and optional peers for
 the adapter you use. The core and writer have no external JavaScript runtime
-peers; the package embeds its compiled WASM, so consumers do not need Rust.
+peers; the package includes its compiled `.wasm` file, so consumers do not need Rust.
 
 | Entry                       | Host / peers                                |
 | --------------------------- | ------------------------------------------- |
@@ -72,9 +72,30 @@ peers; the package embeds its compiled WASM, so consumers do not need Rust.
 | `multimd-table/marked`      | `marked` 18 (Node.js 20+ when used in Node) |
 | `multimd-table/markdown-it` | `markdown-it` 15                            |
 
-APIs remain synchronous after the ESM import. Each module graph compiles and
-instantiates the embedded core on first import; that initialization has a cost
-separate from parsing throughput. Browsers and Workers need WebAssembly support.
+The ESM import automatically loads and initializes the WASM core. No manual
+`init()` call or resource path is required. APIs remain synchronous after import:
+
+```ts
+import { parseTable } from "multimd-table";
+
+const table = parseTable("A|B\n-|-\nhello|world");
+```
+
+Node and Bun read the file from the installed package. Browsers and module Workers
+load it relative to the JavaScript module; serve the complete package or let an
+asset-aware bundler such as Vite handle the URL. A bundler may emit the WASM as a
+separate resource or inline it in its output; both forms are supported. The npm
+package itself contains one binary, with no Base64 copy.
+
+Module initialization uses top-level `await`, so bundled output must support
+ES2022 modules. With Vite Workers, use `worker: { format: "es" }`. For Node SSR,
+keep `multimd-table` external, as Vite does by default: the installed package
+owns its WASM resource. Bundlers that do not process `new URL(..., import.meta.url)`
+assets must preserve the module-relative file layout; arbitrary fully bundled SSR,
+classic Workers and edge runtimes are not covered by this loading path.
+
+Initialization has a cost separate from parsing throughput. Browsers and Workers
+need WebAssembly support and permission to fetch the same-origin WASM resource.
 Apps with CSP must allow WASM compilation, for example with `wasm-unsafe-eval` in
 `script-src` ([WebAssembly compilation and CSP](https://developer.mozilla.org/en-US/docs/WebAssembly/Reference/JavaScript_interface/Module/Module)).
 When bundling remark in a Web Worker, select the `worker` export condition so its
@@ -339,7 +360,8 @@ for that workload.
 
 ## Playground
 
-The static Playground uses the published `multimd-table@0.3.0` package. Try merged
+[Open the Playground](https://murlors.github.io/multimd-table/). The static site
+uses the published `multimd-table@0.4.0` package. Try merged
 cells, multiline content, headerless tables and escaping; switch between rendered
 Markdown, the complete model and canonical writer output. Parser options update
 live. You can copy results, apply written Markdown without losing the rest of the
@@ -359,11 +381,11 @@ Run `vp -C playground check`, `vp -C playground test` and `vp -C playground buil
 for static checks, boundary tests and a production build. The deployable files are in `playground/dist/`; their relative asset URLs
 also work under a project subdirectory. Serve them with any static host.
 
-GitHub Pages deployment is prepared in the **Playground** workflow. After pushing
-the changes, set **Settings → Pages → Source** to **GitHub Actions**, then manually
-run that workflow on `main`. Pushes and pull requests only validate the site;
-deployment requires the manual run. No hosted Playground is deployed by these
-local commands.
+The public site is hosted on GitHub Pages. The **Playground** workflow builds the
+pinned npm release and deploys `playground/dist/` when manually run on `main`.
+Pushes and pull requests validate the project without changing the public site.
+When updating the demo, change its npm release pin and displayed version together,
+then test, build and run the deployment workflow.
 
 ## Development
 

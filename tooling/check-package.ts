@@ -301,10 +301,10 @@ try {
     }
     assert.match(
       entry,
-      /^package\/(?:package\.json|README\.md|LICENSE|dist\/(?:[\w-]+\.(?:js|d\.ts)|internal\/[\w-]+\.(?:js|mjs)))$/,
+      /^package\/(?:package\.json|README\.md|LICENSE|dist\/(?:[\w-]+\.(?:js|d\.ts)|internal\/[\w-]+\.(?:js|mjs|wasm)))$/,
       `Unexpected packaged file: ${entry}`,
     );
-    const content = run(["tar", "-xOzf", archive, entry], root);
+    const content = entry.endsWith(".wasm") ? "" : run(["tar", "-xOzf", archive, entry], root);
     // 旧构建目录即使残留 map，也不能入包；发布的 JS 和声明同样不能引用它们。
     if (entry.startsWith("package/dist/")) {
       assert.ok(
@@ -329,9 +329,10 @@ try {
     "package/dist/markdown-it.d.ts",
     "package/dist/types.d.ts",
     "package/dist/internal/backend.js",
+    "package/dist/internal/loader.js",
     "package/dist/internal/wasm.mjs",
     "package/dist/internal/wire.mjs",
-    "package/dist/internal/wasm-data.js",
+    "package/dist/internal/core.wasm",
   ];
   assert.deepEqual(
     [...files].sort(),
@@ -441,6 +442,23 @@ console.log(JSON.stringify({ initializationMs, version: process.versions.bun ?? 
       for (const name of ["index.html", "main.mjs"])
         await cp(join(root, "test/package", name), join(output, name));
       console.log(`[package] browser bundles and unbundled package copied to ${output}`);
+      // SSR 保持包外置，让 Node/Bun 从安装位置读取 WASM，不假设服务端输出会复制资产。
+      await build({
+        configFile: false,
+        root: directory,
+        ssr: { external: ["multimd-table"] },
+        build: {
+          ssr: join(directory, "browser.mjs"),
+          outDir: join(directory, "ssr"),
+          rolldownOptions: { output: { entryFileNames: "server.mjs" } },
+        },
+      });
+      await writeFile(
+        join(directory, "ssr-check.mjs"),
+        'import { check } from "./ssr/server.mjs"; console.log(JSON.stringify(check()));\n',
+      );
+      for (const engine of [bun, "node"]) run([engine, "ssr-check.mjs"], directory);
+      console.log("[package] externalized Vite SSR: Node and Bun passed");
     }
   }
   const acceptance = join(root, ".performance/package-acceptance");

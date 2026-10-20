@@ -1,6 +1,6 @@
 {
   "name": "multimd-table",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Parse, render and write MultiMarkdown tables with merged cells, structured data and Markdown ecosystem adapters",
   "keywords": [
     "colspan",
@@ -43,9 +43,10 @@
     "dist/markdown-it.d.ts",
     "dist/types.d.ts",
     "dist/internal/backend.js",
+    "dist/internal/loader.js",
     "dist/internal/wasm.mjs",
     "dist/internal/wire.mjs",
-    "dist/internal/wasm-data.js",
+    "dist/internal/core.wasm",
     "LICENSE"
   ],
   "type": "module",

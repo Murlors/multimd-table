@@ -30,6 +30,9 @@ export default defineConfig({
       "src/markdown-it.ts",
       "src/types.ts",
       "src/internal/backend.ts",
+      "src/internal/loader.ts",
+      "src/internal/wasm.mjs",
+      "src/internal/wire.mjs",
     ],
     unbundle: true,
     platform: "neutral",
@@ -40,9 +43,13 @@ export default defineConfig({
     publint: true,
     attw: { profile: "esm-only", level: "error" },
     tsconfig: "tsconfig.build.json",
-    deps: { neverBundle: [/\.mjs$/, /wasm-data\.js$/] },
+    deps: { neverBundle: [/\.mjs$/, /^node:/] },
+    outputOptions: {
+      entryFileNames: (chunk) =>
+        chunk.facadeModuleId?.endsWith(".mjs") ? "[name].mjs" : "[name].js",
+    },
     copy: {
-      from: ["src/internal/wasm.mjs", "src/internal/wire.mjs", "src/internal/wasm-data.js"],
+      from: "src/internal/core.wasm",
       to: "dist/internal",
     },
     hooks: { "build:prepare": prepareWasm },

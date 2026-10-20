@@ -5,5 +5,5 @@ dist/
 .performance/
 crates/core/target/
 crates/core/bindings/__pycache__/
-src/internal/wasm-data.js
+src/internal/core.wasm
 .DS_Store

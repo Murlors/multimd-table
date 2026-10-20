@@ -22,7 +22,9 @@ const paths = [
   "tooling/performance/report.ts",
   "src/internal/wasm.mjs",
   "src/internal/wire.mjs",
-  ...["backend.js", "wasm-data.js", "wasm.mjs", "wire.mjs"].map((name) => `dist/internal/${name}`),
+  ...["backend.js", "loader.js", "core.wasm", "wasm.mjs", "wire.mjs"].map(
+    (name) => `dist/internal/${name}`,
+  ),
 ];
 if (writer) paths.push("dist/writer.js");
 assert.ok(

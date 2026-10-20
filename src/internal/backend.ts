@@ -1,8 +1,7 @@
-import encoded from "./wasm-data.js";
+import { loadWasm } from "./loader.js";
 import { createCore } from "./wasm.mjs";
 
 interface HostBuffer {
-  from(source: string, encoding: "base64"): Uint8Array<ArrayBuffer>;
   from(
     buffer: ArrayBuffer,
     offset: number,
@@ -13,16 +12,8 @@ interface HostBuffer {
 }
 const buffer = (globalThis as typeof globalThis & { Buffer?: HostBuffer }).Buffer;
 
-function bytes(): Uint8Array<ArrayBuffer> {
-  if (buffer) return buffer.from(encoded, "base64");
-  const source = atob(encoded);
-  const output = new Uint8Array(source.length);
-  for (let i = 0; i < source.length; i++) output[i] = source.charCodeAt(i);
-  return output;
-}
-
-// 内嵌模块保持同步 API；浏览器、Worker 与 Node 共用同一份 Rust 核心。
-export const runtime = createCore(new WebAssembly.Instance(new WebAssembly.Module(bytes())), {
+// Node/Bun 从包内读取；浏览器与模块 Worker 从模块相邻的资源自动加载。
+export const runtime = createCore(await loadWasm(new URL("./core.wasm", import.meta.url)), {
   copyUtf16: buffer
     ? (source, memory, pointer) => {
         const length = source.length * 2;

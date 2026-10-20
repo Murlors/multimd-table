@@ -3,7 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** 测试与打包共用锁定的 Rust 构建，只在字节变化时更新内嵌模块。 */
+/** 测试与打包共用锁定的 Rust 构建，只在字节变化时更新独立 WASM。 */
 export default async function prepareWasm(): Promise<void> {
   const root = fileURLToPath(new URL("../", import.meta.url));
   execFileSync(
@@ -22,14 +22,13 @@ export default async function prepareWasm(): Promise<void> {
   const bytes = await readFile(
     resolve(root, "crates/core/target/wasm32-unknown-unknown/release/multimd_table_core.wasm"),
   );
-  const source = `// Generated from crates/core; do not edit.\nexport default ${JSON.stringify(bytes.toString("base64"))};\n`;
-  const path = resolve(root, "src/internal/wasm-data.js");
-  const previous = await readFile(path, "utf8").catch((error: NodeJS.ErrnoException) => {
+  const path = resolve(root, "src/internal/core.wasm");
+  const previous = await readFile(path).catch((error: NodeJS.ErrnoException) => {
     if (error.code !== "ENOENT") throw error;
-    return "";
+    return Buffer.alloc(0);
   });
-  if (source !== previous) await writeFile(path, source);
-  console.log(`Embedded Rust/WASM: ${bytes.length} bytes`);
+  if (!bytes.equals(previous)) await writeFile(path, bytes);
+  console.log(`Rust/WASM: ${bytes.length} bytes`);
 }
 
 if (import.meta.main) await prepareWasm();
