@@ -1,0 +1,29 @@
+[build-system]
+requires = ["maturin>=1.15,<2"]
+build-backend = "maturin"
+
+[project]
+name = "multimd-table"
+version = "0.1.0"
+description = "Parse and write MultiMarkdown tables with merged cells using a shared Rust core"
+requires-python = ">=3.11"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Rust",
+  "Typing :: Typed",
+]
+
+[project.urls]
+Repository = "https://github.com/Murlors/multimd-table"
+
+[tool.maturin]
+manifest-path = "rust/Cargo.toml"
+python-source = "src"
+locked = true
+module-name = "multimd_table._native"
+bindings = "pyo3"
+include = [{ path = "tests/**", format = "sdist" }]

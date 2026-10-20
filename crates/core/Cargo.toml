@@ -8,6 +8,11 @@ license = "MIT"
 [lib]
 crate-type = ["rlib", "cdylib"]
 
+[features]
+# WASM 与 C ABI 探针保留原有导出；原生语言绑定直接使用 Rust API。
+default = ["c-abi"]
+c-abi = []
+
 [profile.release]
 lto = true
 codegen-units = 1

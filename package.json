@@ -9,6 +9,7 @@
   "scripts": {
     "verify": "vp check && cargo test --locked --manifest-path crates/core/Cargo.toml && vp test && vp build && vp run verify:package",
     "verify:package": "vp run multimd-table#verify:package",
+    "verify:python": "bun tooling/prepare-wasm.ts && bun tooling/export-contracts.ts && python tooling/check-python.py",
     "bench": "vp run multimd-table#bench",
     "bench:compare": "vp run multimd-table#bench:compare",
     "core:check": "vp pack && cargo build --locked --release --manifest-path crates/core/Cargo.toml && bun tooling/shared-core-vectors.ts",

@@ -5,6 +5,10 @@ dist/
 .performance/
 crates/core/target/
 crates/core/bindings/__pycache__/
+packages/python/rust/target/
+packages/python/**/__pycache__/
+packages/python/.venv/
 packages/js/src/internal/core.wasm
 packages/js/README.md
+tooling/__pycache__/
 .DS_Store
