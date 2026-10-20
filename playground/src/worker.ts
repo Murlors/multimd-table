@@ -4,7 +4,10 @@ import type { SharedState } from "./state.ts";
 export interface Request extends SharedState {
   id: number;
 }
-export type Response = { id: number; result: Result } | { id: number; error: string };
+export type Response =
+  | { ready: true }
+  | { id: number; result: Result }
+  | { id: number; error: string };
 
 const worker = self as unknown as {
   postMessage(message: Response): void;
@@ -20,3 +23,5 @@ worker.onmessage = ({ data }) => {
     });
   }
 };
+// WASM 在模块导入时异步加载；通知页面后再接收首个解析请求。
+worker.postMessage({ ready: true });

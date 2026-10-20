@@ -25,6 +25,7 @@ let result: Result | null = null;
 let revision = 0;
 let timer: ReturnType<typeof setTimeout>;
 let worker: Worker | null = null;
+let workerReady = false;
 let currentSource = "";
 let pending = true;
 
@@ -78,7 +79,7 @@ function fail(message: string) {
 }
 function run() {
   clearTimeout(timer);
-  if (!worker) return;
+  if (!worker || !workerReady) return;
   currentSource = source.value;
   worker.postMessage({ id: revision, source: currentSource, options: options() } satisfies Request);
 }
@@ -89,7 +90,7 @@ function schedule() {
   notice.textContent = "";
   pending = true;
   updateActions();
-  setStatus("Updating…", "idle");
+  setStatus(workerReady ? "Updating…" : "Loading parser…", "idle");
   clearTimeout(timer);
   timer = setTimeout(run, 120);
 }
@@ -132,6 +133,11 @@ preview.srcdoc = previewDocument("");
 try {
   worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
   worker.onmessage = ({ data }: MessageEvent<Response>) => {
+    if ("ready" in data) {
+      workerReady = true;
+      run();
+      return;
+    }
     // 只接收最新输入的结果，旧 Worker 响应不能覆盖用户正在编辑的内容。
     if (data.id !== revision) return;
     if ("result" in data) show(data.result);

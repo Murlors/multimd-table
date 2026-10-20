@@ -4,7 +4,7 @@
   "type": "module",
   "dependencies": {
     "markdown-it": "catalog:",
-    "multimd-table-release": "npm:multimd-table@0.3.0"
+    "multimd-table-release": "npm:multimd-table@0.4.0"
   },
   "devDependencies": {
     "vite": "catalog:",

@@ -5,5 +5,6 @@ export default defineConfig({
   server: { host: "127.0.0.1", port: 4173, strictPort: true },
   preview: { host: "127.0.0.1", port: 4173, strictPort: true },
   worker: { format: "es" },
+  build: { assetsInlineLimit: 0 },
   test: { name: "playground", include: ["test/**/*.test.ts"] },
 });
