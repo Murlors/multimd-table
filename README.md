@@ -11,8 +11,9 @@ or write table data back to Markdown.
 
 [Integrations](#integrations) · [API reference](docs/api.md)
 
-The [Python development package](packages/python/README.md) provides the same core API
-through a native Rust extension. It is not yet published to PyPI.
+The [Python package](packages/python/README.md) provides the same core API
+through a native Rust extension, with an optional markdown-it-py adapter and a
+Notebook example. Install it with `python -m pip install multimd-table`.
 
 ## Install
 
@@ -176,7 +177,7 @@ owns its public API and packaging, and both use the same Rust implementation:
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | Root `package.json` and `vite.config.ts` | Shared tools, workspace settings and repository-wide checks; not published.                    |
 | `packages/js/`                           | The published `multimd-table` npm package: ESM entries, types, JS adapters and package checks. |
-| `packages/python/`                       | The Python core package and PyO3 bridge; not yet published to PyPI.                            |
+| `packages/python/`                       | Python core, optional markdown-it-py adapter, PyO3 bridge and Notebook example.                |
 | `crates/core/`                           | The shared Rust grammar and writer.                                                            |
 | `contracts/`                             | Frozen compatibility expectations shared across languages.                                     |
 | `playground/`                            | The browser demo, using the pinned npm release.                                                |

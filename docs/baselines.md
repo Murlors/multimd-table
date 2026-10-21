@@ -258,6 +258,14 @@ exporting contract vectors; no earlier JS build is required.
 See the [Python development guide](../packages/python/README.md#development).
 CI checks CPython 3.11 and 3.14 on Linux, macOS and Windows; a configured matrix is
 not evidence that every platform has passed locally.
+Python acceptance separates dependency-free core consumers from `markdown-it` extra consumers.
+The adapter uses 114 shared hand-written HTML cases from `packages/js/test/cases.ts`,
+plus Python host-boundary, token-map and lifecycle tests. `tooling/export-contracts.ts`
+exports these alongside the frozen core vectors. CI also executes the Notebook and checks its HTML output.
+The Python release workflow validates each exact wheel across CPython 3.11–3.14
+and six platform targets: x86-64 and ARM64 on Linux, Windows and macOS.
+Linux and Windows ARM64 jobs build and install wheels on native runners.
+See the [Python release guide](../packages/python/README.md#release).
 
 `vp run bench --out .performance/baseline` measures the core, writer and adapters
 on Node and Bun. The same TypeScript runner executes directly in both runtimes.
