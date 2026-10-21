@@ -14,7 +14,12 @@ def inspect(path):
         metadata_name = next(name for name in names if name.endswith(".dist-info/METADATA"))
         metadata = Parser().parsestr(archive.read(metadata_name).decode("utf-8"))
         assert metadata["Name"] == "multimd-table"
-        assert not metadata.get_all("Requires-Dist"), "Core wheels must have no Python runtime dependencies"
+        requirements = metadata.get_all("Requires-Dist", [])
+        for requirement in requirements:
+            name, separator, marker = requirement.partition(";")
+            assert name.strip() in ("markdown-it-py>=3,<5", "markdown-it-py<5,>=3") and separator, requirement
+            assert marker.strip() in ('extra == "markdown-it"', "extra == 'markdown-it'"), requirement
+        assert metadata.get_all("Provides-Extra") == ["markdown-it"]
         native = [name for name in names if name.endswith((".so", ".pyd"))]
         assert len(native) == 1 and native[0].startswith("multimd_table/_native.")
         for name in names:
@@ -28,7 +33,8 @@ def inspect(path):
             "archiveBytes": path.stat().st_size,
             "unpackedBytes": sum(item.file_size for item in archive.infolist()),
             "nativeBytes": archive.getinfo(native[0]).file_size,
-            "runtimeDependencies": metadata.get_all("Requires-Dist", []),
+            "runtimeDependencies": [],
+            "optionalDependencies": requirements,
             "files": [{"path": item.filename, "bytes": item.file_size} for item in archive.infolist()],
         }
 

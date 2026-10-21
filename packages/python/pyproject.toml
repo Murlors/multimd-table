@@ -19,6 +19,10 @@ classifiers = [
 
 [project.urls]
 Repository = "https://github.com/Murlors/multimd-table"
+Documentation = "https://github.com/Murlors/multimd-table/blob/main/packages/python/README.md"
+
+[project.optional-dependencies]
+markdown-it = ["markdown-it-py>=3,<5"]
 
 [tool.maturin]
 manifest-path = "rust/Cargo.toml"
@@ -26,4 +30,4 @@ python-source = "src"
 locked = true
 module-name = "multimd_table._native"
 bindings = "pyo3"
-include = [{ path = "tests/**", format = "sdist" }]
+include = [{ path = "tests/**", format = "sdist" }, { path = "examples/**", format = "sdist" }]
