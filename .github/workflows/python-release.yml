@@ -66,6 +66,8 @@ jobs:
         with:
           name: python-release-contracts
           path: .performance/python
+      # 在宿主上创建输出目录，保留 runner 所有权，避免 Linux 容器创建 root 所有的父目录。
+      - run: python -c "from pathlib import Path; Path('.performance/python-release/wheels').mkdir(parents=True)"
       - uses: PyO3/maturin-action@v1
         with:
           working-directory: packages/python
